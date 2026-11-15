@@ -335,7 +335,7 @@
                         <label class="px-3.5 py-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-xs font-medium text-stone-700 flex items-center gap-1.5 transition cursor-pointer">
                             <i data-lucide="upload" class="w-4 h-4"></i>
                             <span>Importa</span>
-                            <input type="file" accept=".json" onchange="importData(event)" class="hidden">
+                            <input type="file" accept=".json,.txt,application/json,text/plain" onchange="importData(event)" class="hidden">
                         </label>
                     </div>
                 </div>
@@ -892,6 +892,7 @@
         }
 
         // Calcola le date reali dei 7 giorni della settimana selezionata partendo da startDate
+        let lastPillsWeek = null;
         const WEEKDAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
         function getWeekDates(weekNum, withDay = false) {
             if (!appState.profile.startDate) return Array(7).fill('');
@@ -930,6 +931,7 @@
 
             // Pillole 1-12
             const pillsContainer = document.getElementById('week-pills-container');
+            const prevScroll = pillsContainer.scrollLeft;
             pillsContainer.innerHTML = '';
             for (let i = 1; i <= 12; i++) {
                 const isSelected = i === w;
@@ -949,6 +951,22 @@
                 `;
                 if (i === getTodayWeek()) btn.classList.add('ring-2', 'ring-inset', 'ring-emerald-400');
                 pillsContainer.appendChild(btn);
+            }
+
+            // Le pillole vengono ricreate a ogni render: ripristina lo scorrimento e, se la settimana
+            // è cambiata, porta la pillola selezionata al centro (animazione fluida)
+            if (pillsContainer.clientWidth > 0) {
+                pillsContainer.scrollLeft = prevScroll;
+                const sel = pillsContainer.children[w - 1];
+                if (sel && w !== lastPillsWeek) {
+                    const cr = pillsContainer.getBoundingClientRect();
+                    const br = sel.getBoundingClientRect();
+                    const target = Math.max(0, pillsContainer.scrollLeft + (br.left - cr.left) - (cr.width - br.width) / 2);
+                    const behavior = lastPillsWeek === null ? 'auto' : 'smooth';
+                    if (typeof pillsContainer.scrollTo === 'function') pillsContainer.scrollTo({ left: target, behavior });
+                    else pillsContainer.scrollLeft = target;
+                    lastPillsWeek = w;
+                }
             }
 
             // Banner Pausa (dopo settimana 4 e settimana 8)
@@ -979,7 +997,7 @@
                         <span class="text-xs font-bold text-stone-400 w-5">${String(idx + 1).padStart(2, '0')}</span>
                         <div>
                             <div class="text-sm font-medium text-stone-800">${DAY_NAMES[idx]}${isToday ? ' <span class="ml-1 px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-semibold uppercase tracking-wide align-middle">Oggi</span>' : ''}</div>
-                            <div class="text-[11px] text-stone-400">${datesDay[idx] || ''}</div>
+                            <div class="text-xs text-stone-500">${datesDay[idx] || ''}</div>
                         </div>
                     </div>
                     <div class="col-span-3 flex justify-center">
@@ -1234,17 +1252,45 @@
         }
 
         // Export / Import JSON
-        function exportData() {
-            const blob = new Blob([JSON.stringify(appState, null, 2)], { type: 'application/json' });
+        function markBackupDone() {
+            try { localStorage.setItem(BACKUP_KEY, new Date().toISOString()); } catch (e) {}
+            updateBackupInfo();
+        }
+
+        function downloadBackup(json, name) {
+            const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `SOS-Smell-Journey-${appState.profile.startDate || 'diario'}.json`;
+            a.download = name + '.json';
             a.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-            try { localStorage.setItem(BACKUP_KEY, new Date().toISOString()); } catch (e) {}
-            updateBackupInfo();
+            markBackupDone();
             showToast('Backup scaricato');
+        }
+
+        // Su Android apre il menu Condividi (Drive, email, WhatsApp, "Salva"...); altrimenti scarica il file
+        async function exportData() {
+            const json = JSON.stringify(appState, null, 2);
+            const name = `SOS-Smell-Journey-${appState.profile.startDate || 'diario'}`;
+            try {
+                if (navigator.share && navigator.canShare) {
+                    const candidates = [
+                        new File([json], name + '.json', { type: 'application/json' }),
+                        new File([json], name + '.txt', { type: 'text/plain' })
+                    ];
+                    const file = candidates.find(f => navigator.canShare({ files: [f] }));
+                    if (file) {
+                        await navigator.share({ files: [file], title: 'Backup SOS Smell Journey' });
+                        markBackupDone();
+                        showToast('Backup condiviso');
+                        return;
+                    }
+                }
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;   // chiuso senza salvare: non conta come backup
+            }
+            downloadBackup(json, name);
         }
 
         function importData(event) {
@@ -1331,24 +1377,51 @@
             }
         }
 
+        // ---------- Timer: tempi reali, schermo acceso, vibrazione ----------
+        let timerPhaseEnd = 0;   // istante (ms) in cui finisce la fase corrente
+        let wakeLock = null;
+
+        function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} }
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator && !wakeLock) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                }
+            } catch (e) { wakeLock = null; }
+        }
+        function releaseWakeLock() {
+            try { if (wakeLock) wakeLock.release(); } catch (e) {}
+            wakeLock = null;
+        }
+        // Il blocco dello schermo cade se l'app va in secondo piano: riprendilo al ritorno
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && timerRunning) requestWakeLock();
+        });
+
+        function tickTimer() {
+            const remaining = Math.ceil((timerPhaseEnd - Date.now()) / 1000);
+            if (remaining <= 0) advanceTimerPhase();
+            else if (remaining !== timerRemaining) { timerRemaining = remaining; updateTimerUI(); }
+        }
+
         function startTimer() {
             timerRunning = true;
+            timerPhaseEnd = Date.now() + timerRemaining * 1000;
             playGentleChime(528);
+            buzz(120);
+            requestWakeLock();
             updateTimerUI();
-            timerInterval = setInterval(() => {
-                timerRemaining--;
-                if (timerRemaining <= 0) {
-                    advanceTimerPhase();
-                } else {
-                    updateTimerUI();
-                }
-            }, 1000);
+            timerInterval = setInterval(tickTimer, 250);
         }
 
         function stopTimer() {
+            if (timerRunning) timerRemaining = Math.max(1, Math.ceil((timerPhaseEnd - Date.now()) / 1000));
             timerRunning = false;
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
+            releaseWakeLock();
             updateTimerUI();
         }
 
@@ -1362,6 +1435,7 @@
                     // Fine del 4° profumo: rituale completato!
                     stopTimer();
                     playGentleChime(660);
+                    buzz([200, 100, 200, 100, 300]);
                     document.getElementById('timer-phase-label').textContent = 'Completato';
                     document.getElementById('timer-seconds').textContent = '✓';
                     document.getElementById('timer-controls').classList.add('hidden');
@@ -1372,13 +1446,16 @@
                 timerPhase = 'rest';
                 timerRemaining = 10;
                 playGentleChime(440);
+                buzz(150);
             } else {
                 // Passa al profumo successivo (20s)
                 timerScentIdx++;
                 timerPhase = 'sniff';
                 timerRemaining = 20;
                 playGentleChime(528);
+                buzz([120, 80, 120]);
             }
+            timerPhaseEnd = Date.now() + timerRemaining * 1000;
             updateTimerUI();
         }
 
