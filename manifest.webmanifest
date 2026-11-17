@@ -1,6 +1,6 @@
 {
-  "name": "SOS Smell Journey",
-  "short_name": "Smell Journey",
+  "name": "Diario Olfattivo",
+  "short_name": "Diario Olfattivo",
   "lang": "it",
   "start_url": "./",
   "scope": "./",
