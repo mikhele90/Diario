@@ -892,6 +892,8 @@
                 hasProfileData ||
                 !!(appState.refill && appState.refill.last) ||
                 !!appState.nextChoice ||
+                (appState.setId && appState.setId !== 'set01') ||
+                (profile.startDate && profile.startDate !== localDateStr()) ||
                 (Array.isArray(appState.archive) && appState.archive.length > 0);
         }
 
@@ -1697,7 +1699,23 @@
                         !isValidDateOnly(candidate.refill.last))) return false;
             }
 
-            if (!includeArchive && candidate.archive !== undefined) return false;
+            if (!includeArchive) {
+                // L'archivio viene mostrato direttamente: richiede quindi una fotografia completa.
+                if (candidate.archive !== undefined ||
+                    !isPlainObject(candidate.profile) ||
+                    !isValidDateOnly(candidate.profile.startDate) ||
+                    !isPlainObject(candidate.baseline) ||
+                    scentIds.some(id => !isValidScentRecord(candidate.baseline[id]))) return false;
+                for (let weekNum = 1; weekNum <= 12; weekNum++) {
+                    const week = candidate.weeks[weekNum];
+                    if (!isPlainObject(week) ||
+                        !Array.isArray(week.days) || week.days.length !== 7 ||
+                        week.days.some(day => !isPlainObject(day) ||
+                            typeof day.morning !== 'boolean' || typeof day.evening !== 'boolean') ||
+                        !isPlainObject(week.scents) ||
+                        scentIds.some(id => !isValidScentRecord(week.scents[id]))) return false;
+                }
+            }
             if (includeArchive && candidate.archive !== undefined) {
                 if (!Array.isArray(candidate.archive) || candidate.archive.length > 500) return false;
                 for (const entry of candidate.archive) {
