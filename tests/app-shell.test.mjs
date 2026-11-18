@@ -16,7 +16,10 @@ test('HTML usa un foglio di stile e un modulo JavaScript esterni', () => {
     assert.match(html, /<link rel="stylesheet" href="\.\/styles\.css">/);
     assert.match(html, /<script type="module" src="\.\/app\.js"><\/script>/);
     assert.doesNotMatch(html, /<style\b/i);
-    assert.doesNotMatch(html, /<script\b[^>]*type=["']module["'][^>]*>[\s\S]*?<\/script>/i);
+    const moduleScript = html.match(/<script\b([^>]*)>([\s\S]*?)<\/script>/i);
+    assert.ok(moduleScript, 'Modulo applicativo non trovato');
+    assert.match(moduleScript[1], /\bsrc=["']\.\/app\.js["']/);
+    assert.equal(moduleScript[2].trim(), '');
     assert.equal((html.match(/<link rel="stylesheet"/g) || []).length, 1);
     assert.ok(styles.length > 0);
 });
