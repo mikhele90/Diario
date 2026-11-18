@@ -47,7 +47,7 @@ test('tutte le funzioni richiamate dagli handler HTML sono esposte su window', (
     }
 });
 
-test('i pulsanti per ripetere lo stesso set usano l'azione pubblica', () => {
+test("i pulsanti per ripetere lo stesso set usano l'azione pubblica", () => {
     assert.equal(
         (html.match(/openCurrentSetNewPathDialog\(\)/g) || []).length,
         2
