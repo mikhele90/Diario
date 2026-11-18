@@ -1,0 +1,11 @@
+{
+  "name": "diario-olfattivo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PWA statica Diario Olfattivo. Node.js serve solo per eseguire i test e i controlli locali.",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check app.js && node --check src/diario-core.mjs && node --check sw.js"
+  }
+}

@@ -1,0 +1,211 @@
+/**
+ * Funzioni pure condivise da Diario e dalla suite di test.
+ * Questo modulo non accede al DOM, al browser storage o a servizi esterni.
+ */
+
+function isPlainObject(value) {
+            return value !== null && typeof value === 'object' && !Array.isArray(value);
+        }
+
+        function isValidDateOnly(value) {
+            if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+            const [year, month, day] = value.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
+            return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+        }
+
+        function isValidOptionalDate(value) {
+            return value === undefined || value === '' || isValidDateOnly(value);
+        }
+
+        function isValidOptionalTime(value) {
+            return value === undefined || value === '' ||
+                (typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value));
+        }
+
+        function isValidTextValue(value, maxLength = 20000) {
+            return value === undefined || (typeof value === 'string' && value.length <= maxLength);
+        }
+
+        function isValidScentRecord(record) {
+            return isPlainObject(record) &&
+                (record.score === undefined || record.score === null ||
+                    (Number.isInteger(record.score) && record.score >= 0 && record.score <= 5)) &&
+                isValidTextValue(record.impression, 5000);
+        }
+
+        // Verifica il formato prima di passare i dati a hydrateState/rendering.
+        // I campi assenti restano compatibili con backup precedenti: deepMerge li completa.
+        export function isValidDiaryState(candidate, includeArchive = true) {
+            if (!isPlainObject(candidate) || !isPlainObject(candidate.weeks)) return false;
+
+            if (candidate.setId !== undefined && !['set01', 'set02'].includes(candidate.setId)) return false;
+            if (candidate.currentWeek !== undefined &&
+                (!Number.isInteger(candidate.currentWeek) || candidate.currentWeek < 1 || candidate.currentWeek > 12)) return false;
+            if (candidate.nextChoice !== undefined &&
+                candidate.nextChoice !== null && !['same', 'other', 'set02'].includes(candidate.nextChoice)) return false;
+
+            if (candidate.profile !== undefined) {
+                if (!isPlainObject(candidate.profile)) return false;
+                const p = candidate.profile;
+                if (!isValidTextValue(p.name, 200) ||
+                    !isValidOptionalDate(p.startDate) ||
+                    !isValidOptionalTime(p.morningTime) ||
+                    !isValidOptionalTime(p.eveningTime) ||
+                    !isValidTextValue(p.initialNotes) ||
+                    !isValidTextValue(p.finalReflection) ||
+                    !isValidTextValue(p.nextStep)) return false;
+            }
+
+            const scentIds = ['eucalipto', 'limone', 'geranio', 'garofano'];
+            if (candidate.baseline !== undefined) {
+                if (!isPlainObject(candidate.baseline)) return false;
+                for (const id of scentIds) {
+                    if (candidate.baseline[id] !== undefined && !isValidScentRecord(candidate.baseline[id])) return false;
+                }
+            }
+
+            for (let weekNum = 1; weekNum <= 12; weekNum++) {
+                const week = candidate.weeks[weekNum];
+                if (week === undefined) continue;
+                if (!isPlainObject(week)) return false;
+
+                if (week.days !== undefined) {
+                    if (!Array.isArray(week.days) || week.days.length !== 7 ||
+                        week.days.some(day => !isPlainObject(day) ||
+                            (day.morning !== undefined && typeof day.morning !== 'boolean') ||
+                            (day.evening !== undefined && typeof day.evening !== 'boolean'))) return false;
+                }
+                if (week.scents !== undefined) {
+                    if (!isPlainObject(week.scents)) return false;
+                    for (const id of scentIds) {
+                        if (week.scents[id] !== undefined && !isValidScentRecord(week.scents[id])) return false;
+                    }
+                }
+                if (!isValidTextValue(week.reflection) || !isValidTextValue(week.otherNotes)) return false;
+            }
+
+            if (candidate.pauses !== undefined) {
+                if (!isPlainObject(candidate.pauses)) return false;
+                for (const pauseNum of ['4', '8']) {
+                    const pause = candidate.pauses[pauseNum];
+                    if (pause === undefined) continue;
+                    if (!isPlainObject(pause) ||
+                        !isValidTextValue(pause.q1) ||
+                        !isValidTextValue(pause.q2) ||
+                        !isValidTextValue(pause.q3)) return false;
+                }
+            }
+
+            if (candidate.refill !== undefined) {
+                if (!isPlainObject(candidate.refill) ||
+                    (candidate.refill.last !== undefined && candidate.refill.last !== null &&
+                        !isValidDateOnly(candidate.refill.last))) return false;
+            }
+
+            if (!includeArchive) {
+                // L'archivio viene mostrato direttamente: richiede quindi una fotografia completa.
+                if (candidate.archive !== undefined ||
+                    !isPlainObject(candidate.profile) ||
+                    !isValidDateOnly(candidate.profile.startDate) ||
+                    !isPlainObject(candidate.baseline) ||
+                    scentIds.some(id => !isValidScentRecord(candidate.baseline[id]))) return false;
+                for (let weekNum = 1; weekNum <= 12; weekNum++) {
+                    const week = candidate.weeks[weekNum];
+                    if (!isPlainObject(week) ||
+                        !Array.isArray(week.days) || week.days.length !== 7 ||
+                        week.days.some(day => !isPlainObject(day) ||
+                            typeof day.morning !== 'boolean' || typeof day.evening !== 'boolean') ||
+                        !isPlainObject(week.scents) ||
+                        scentIds.some(id => !isValidScentRecord(week.scents[id]))) return false;
+                }
+            }
+            if (includeArchive && candidate.archive !== undefined) {
+                if (!Array.isArray(candidate.archive) || candidate.archive.length > 500) return false;
+                for (const entry of candidate.archive) {
+                    if (!isPlainObject(entry) ||
+                        (entry.setId !== undefined && !['set01', 'set02'].includes(entry.setId)) ||
+                        (entry.archivedAt !== undefined &&
+                            (typeof entry.archivedAt !== 'string' || !Number.isFinite(Date.parse(entry.archivedAt)))) ||
+                        !isValidDiaryState(entry.state, false)) return false;
+                }
+            }
+
+            return true;
+        }
+
+export function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+function localDateString(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** Indica se il diario contiene almeno un dato che merita un backup. */
+export function hasAnyDiaryData(appState, today = localDateString()) {
+    if (!appState || typeof appState !== 'object') return false;
+    
+                const hasText = value => typeof value === 'string' && value.trim().length > 0;
+                const hasScoresOrNotes = records => Object.values(records || {}).some(item =>
+                    item && ((item.score !== null && item.score !== undefined) || hasText(item.impression))
+                );
+                const weeks = Object.values(appState.weeks || {});
+                const hasWeekData = weeks.some(week =>
+                    (Array.isArray(week.days) && week.days.some(day => day.morning || day.evening)) ||
+                    hasScoresOrNotes(week.scents) ||
+                    hasText(week.reflection) ||
+                    hasText(week.otherNotes)
+                );
+                const hasPauseData = Object.values(appState.pauses || {}).some(pause =>
+                    pause && Object.values(pause).some(hasText)
+                );
+                const profile = appState.profile || {};
+                const hasProfileData =
+                    hasText(profile.name) ||
+                    hasText(profile.initialNotes) ||
+                    hasText(profile.finalReflection) ||
+                    hasText(profile.nextStep) ||
+                    (profile.morningTime && profile.morningTime !== '08:00') ||
+                    (profile.eveningTime && profile.eveningTime !== '19:00');
+    
+                return hasWeekData ||
+                    hasScoresOrNotes(appState.baseline) ||
+                    hasPauseData ||
+                    hasProfileData ||
+                    !!(appState.refill && appState.refill.last) ||
+                    !!appState.nextChoice ||
+                    (appState.setId && appState.setId !== 'set01') ||
+                    (profile.startDate && profile.startDate !== today) ||
+                    (Array.isArray(appState.archive) && appState.archive.length > 0);
+            
+}
+
+/**
+ * Restituisce la posizione del giorno corrente nel percorso:
+ * { week: 1..12, dayIndex: 0..6 }, oppure null fuori dal percorso.
+ * Usa giorni UTC costruiti dai componenti locali della data per evitare
+ * slittamenti dovuti ai cambi dell'ora legale.
+ */
+export function getRitualPosition(startDate, today = new Date()) {
+    if (!isValidDateOnly(startDate) || !(today instanceof Date) || Number.isNaN(today.getTime())) {
+        return null;
+    }
+
+    const [year, month, day] = startDate.split('-').map(Number);
+    const startUtc = Date.UTC(year, month - 1, day);
+    const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const elapsedDays = Math.round((todayUtc - startUtc) / 86400000);
+
+    if (elapsedDays < 0) return null;
+
+    const week = Math.floor(elapsedDays / 7) + 1;
+    if (week > 12) return null;
+
+    return { week, dayIndex: elapsedDays % 7 };
+}
