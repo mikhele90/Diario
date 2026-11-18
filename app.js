@@ -324,6 +324,10 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
             document.getElementById('np-set').textContent = `i profumi del ${(SET_DEFS[targetSet] || SET_DEFS.set01).name}`;
             document.getElementById('newpath-modal').classList.remove('hidden');
         }
+        function openCurrentSetNewPathDialog() {
+            openNewPathDialog(appState.setId);
+        }
+
         function closeNewPathDialog() { pendingSet = null; document.getElementById('newpath-modal').classList.add('hidden'); }
         function confirmNewPath() { const t = pendingSet; closeNewPathDialog(); if (t) startNewPath(t); }
         function startNewPath(targetSet) {
@@ -1206,6 +1210,7 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
             setNextChoice,
             startNewPath,
             openNewPathDialog,
+            openCurrentSetNewPathDialog,
             closeNewPathDialog,
             confirmNewPath,
             otherSetId,
