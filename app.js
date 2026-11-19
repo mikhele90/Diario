@@ -529,6 +529,9 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
             const dates = getWeekDates(w);
             const todayIdx = getTodayIndexInWeek(w);
             const datesDay = getWeekDates(w, true);
+            const todayWeek = getTodayWeek();
+            const todayButton = document.getElementById('btn-go-today');
+            todayButton.classList.toggle('hidden', todayWeek === -1 || (w === todayWeek && !inPause));
 
             // Intestazione settimana (o momento di riflessione)
             const pad2 = n => String(n).padStart(2, '0');
@@ -568,6 +571,8 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                         ? 'bg-botanical-800 text-white border-botanical-800 shadow-sm' 
                         : 'bg-stone-50 text-stone-600 border-stone-200/80 hover:bg-botanical-50'
                 }`;
+                btn.setAttribute('aria-current', isSelected ? 'step' : 'false');
+                btn.setAttribute('aria-label', `Vai alla settimana ${i}`);
                 btn.innerHTML = `
                     <span>Sett ${String(i).padStart(2, '0')}</span>
                     ${(wSessions > 0 || hasEval) ? `<span class="w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-emerald-300' : 'bg-botanical-500'}"></span>` : ''}
@@ -635,7 +640,7 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                         </div>
                     </div>
                     <div class="col-span-3 flex justify-center">
-                        <button onclick="toggleSession(${idx}, 'morning')" aria-label="Mattino Giorno ${idx + 1}" class="w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                        <button onclick="toggleSession(${idx}, 'morning')" aria-label="Segna sessione del mattino per ${DAY_NAMES[idx]} ${datesDay[idx] || ''}" aria-pressed="${dayObj.morning}" title="Mattino" class="diary-session-toggle w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
                             dayObj.morning 
                                 ? 'bg-amber-500 border-amber-500 text-white shadow-sm' 
                                 : 'bg-white border-stone-200 text-transparent hover:border-amber-300'
@@ -644,7 +649,7 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                         </button>
                     </div>
                     <div class="col-span-3 flex justify-center">
-                        <button onclick="toggleSession(${idx}, 'evening')" aria-label="Sera Giorno ${idx + 1}" class="w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                        <button onclick="toggleSession(${idx}, 'evening')" aria-label="Segna sessione della sera per ${DAY_NAMES[idx]} ${datesDay[idx] || ''}" aria-pressed="${dayObj.evening}" title="Sera" class="diary-session-toggle w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
                             dayObj.evening 
                                 ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' 
                                 : 'bg-white border-stone-200 text-transparent hover:border-indigo-300'
@@ -656,7 +661,13 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                 daysContainer.appendChild(row);
             });
 
+            const weeklyPercent = Math.round((completedCount / 14) * 100);
             document.getElementById('weekly-sessions-badge').textContent = `${completedCount} / 14 sessioni`;
+            document.getElementById('weekly-sessions-progress-track').setAttribute('aria-valuenow', String(completedCount));
+            document.getElementById('weekly-sessions-progress').style.width = `${weeklyPercent}%`;
+            document.getElementById('weekly-progress-text').textContent = completedCount === 14
+                ? 'Hai registrato tutte le 14 sessioni possibili questa settimana.'
+                : `Hai registrato ${completedCount} sessioni su 14 possibili.`;
             document.getElementById('schedule-times-display').textContent = `Orari target: ${appState.profile.morningTime} e ${appState.profile.eveningTime}`;
 
             // Note settimanali
@@ -678,7 +689,7 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                 for (let val = 0; val <= 5; val++) {
                     const isSelected = sData.score === val;
                     scaleButtonsHtml += `
-                        <button onclick="setScentScore(${w}, '${scent.id}', ${val})" title="${SCALE_LABELS[val]}" class="flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold border transition-all active:scale-95 ${
+                        <button onclick="setScentScore(${w}, '${scent.id}', ${val})" aria-label="Valutazione ${scent.name}: ${val} - ${SCALE_LABELS[val]}" aria-pressed="${isSelected}" title="${SCALE_LABELS[val]}" class="diary-score-button flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold border transition-all active:scale-95 ${
                             isSelected 
                                 ? scent.activeBtn + ' shadow-sm' 
                                 : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
@@ -698,7 +709,7 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                             ${sData.score !== null ? `${sData.score} — ${SCALE_LABELS[sData.score]}` : 'Non valutato'}
                         </span>
                     </div>
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5" role="group" aria-label="Scala di intensità per ${scent.name}, da 0 a 5">
                         ${scaleButtonsHtml}
                     </div>
                     <div>
@@ -1154,6 +1165,13 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
             renderedDay = todayKey();
         }
 
+        function goToToday() {
+            if (getTodayWeek() === -1) return;
+            jumpToToday();
+            renderCalendarView();
+            scheduleAutoSave();
+        }
+
         // Indice (0-6) di oggi nella settimana indicata, oppure -1 se oggi non ne fa parte
         function getTodayIndexInWeek(weekNum) {
             const position = getRitualPosition(appState.profile.startDate);
@@ -1195,6 +1213,7 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
         Object.assign(window, {
             switchTab,
             changeWeek,
+            goToToday,
             selectWeek,
             toggleSession,
             setScentScore,
