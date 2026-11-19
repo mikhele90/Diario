@@ -54,9 +54,14 @@ test('kit e backup sono sezioni separate con gli stessi comandi esistenti', () =
 });
 
 test('il ripristino da file resta accessibile e la spiegazione dei dati locali è presente', () => {
-    assert.match(routeView, /<label class="diary-file-action[^"]*">[\\s\\S]*?<input id="backup-file-input"[^>]*class="diary-visually-hidden">[\\s\\S]*?<\\/label>/);
-    assert.match(styles, /\\.diary-visually-hidden\\s*\\{[^}]*clip:\s*rect\\(0, 0, 0, 0\\)/s);
-    assert.match(styles, /\\.diary-tools-grid\\s*\\{/);
+    const labelStart = routeView.indexOf('<label class="diary-file-action');
+    const labelEnd = routeView.indexOf('</label>', labelStart);
+    const fileAction = routeView.slice(labelStart, labelEnd);
+    assert.ok(labelStart >= 0 && labelEnd > labelStart, 'Etichetta del ripristino non trovata');
+    assert.ok(fileAction.includes('id="backup-file-input"'));
+    assert.ok(fileAction.includes('class="diary-visually-hidden"'));
+    assert.match(styles, /\.diary-visually-hidden\s*\{[^}]*clip:\s*rect\(0, 0, 0, 0\)/s);
+    assert.match(styles, /\.diary-tools-grid\s*\{/);
     assert.match(routeView, /aria-live="polite"/);
     assert.match(routeView, /non viene inviato a un server/);
     assert.match(routeView, /sostituisce i dati attuali dopo una richiesta di conferma/);
