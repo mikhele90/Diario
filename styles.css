@@ -218,3 +218,13 @@ body.diary-modal-open { overflow: hidden; }
         transition-duration: 0.01ms !important;
     }
 }
+
+
+/* Pulsanti con sola icona: area interattiva minima 44 × 44 px */
+.diary-icon-button {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
