@@ -11,7 +11,7 @@ const [html, app, styles, serviceWorker] = await Promise.all([
 ]);
 
 test('le finestre modali hanno semantica dialog, titolo, descrizione e chiusura nominata', () => {
-    assert.match(html, /id="ritual-modal" role="dialog" aria-modal="true" aria-labelledby="timer-scent-name" aria-describedby="timer-scent-hint"/);
+    assert.match(html, /id="ritual-modal" role="dialog" aria-modal="true" aria-labelledby="ritual-dialog-title" aria-describedby="timer-scent-hint"/);
     assert.match(html, /id="newpath-modal" role="dialog" aria-modal="true" aria-labelledby="newpath-dialog-title" aria-describedby="newpath-dialog-description"/);
     assert.match(html, /aria-label="Chiudi sessione guidata"/);
     assert.match(html, /id="newpath-dialog-cancel" data-dialog-initial-focus/);
