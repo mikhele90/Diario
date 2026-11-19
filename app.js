@@ -401,6 +401,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             saveNow();
             applySetStatics();
             switchTab('partenza');
+            document.getElementById('nav-partenza').focus({ preventScroll: true });
             showToast('Nuovo percorso iniziato: compila il punto di partenza');
         }
 
