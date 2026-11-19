@@ -101,6 +101,10 @@
                         <button id="btn-next-week" onclick="changeWeek(1)" class="p-2 rounded-xl hover:bg-white disabled:opacity-30 text-stone-700 transition" aria-label="Settimana successiva">
                             <i data-lucide="chevron-right" class="w-5 h-5"></i>
                         </button>
+                        <button id="btn-go-today" onclick="goToToday()" class="diary-mobile-shortcut hidden px-3 rounded-xl border border-botanical-200 bg-white text-xs font-semibold text-botanical-800 hover:bg-botanical-50 items-center gap-1.5" aria-label="Torna alla settimana di oggi">
+                            <i data-lucide="calendar-check" class="w-4 h-4"></i>
+                            <span>Oggi</span>
+                        </button>
                     </div>
                 </div>
 
@@ -177,18 +181,22 @@
                 <!-- COLONNA SINISTRA (5 col): OGNI GIORNO - Il tuo rituale -->
                 <div class="lg:col-span-5 space-y-4">
                     <div class="bg-white rounded-2xl p-5 border border-botanical-200/80 shadow-sm">
-                        <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
                             <div>
                                 <span class="text-[11px] font-bold uppercase tracking-wider text-botanical-600">Ogni Giorno</span>
                                 <h2 class="text-lg font-bold text-stone-900">Il tuo rituale</h2>
                             </div>
-                            <div class="text-right">
-                                <span id="weekly-sessions-badge" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-botanical-100 text-botanical-800">
+                            <div class="text-right shrink-0">
+                                <span id="weekly-sessions-badge" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-botanical-100 text-botanical-800" aria-live="polite">
                                     0 / 14 sessioni
                                 </span>
                             </div>
                         </div>
 
+                        <div id="weekly-sessions-progress-track" class="diary-progress-track" role="progressbar" aria-label="Sessioni registrate questa settimana" aria-valuemin="0" aria-valuemax="14" aria-valuenow="0">
+                            <div id="weekly-sessions-progress" class="diary-progress-fill"></div>
+                        </div>
+                        <p id="weekly-progress-text" class="text-xs text-stone-500 mt-2 mb-3" aria-live="polite">Nessuna sessione registrata questa settimana.</p>
                         <p class="text-xs text-stone-500 mb-4">Segna ogni sessione fatta. Se ne salti una, lasciala vuota: non va recuperata.</p>
 
                         <!-- Intestazione tabella giorni -->
@@ -218,6 +226,7 @@
 
                     <!-- Box Domanda di Riflessione Settimanale & Altre Note -->
                     <div class="bg-white rounded-2xl p-5 border border-botanical-200/80 shadow-sm space-y-4">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-botanical-600">Le tue note della settimana</span>
                         <div>
                             <label id="reflection-question-label" class="block text-sm font-semibold text-botanical-900 mb-1.5">
                                 Che cosa mi aiuta a cominciare?
