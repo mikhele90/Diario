@@ -209,3 +209,29 @@ export function getRitualPosition(startDate, today = new Date()) {
 
     return { week, dayIndex: elapsedDays % 7 };
 }
+
+
+/**
+ * Costruisce i 13 punti della serie olfattiva: rilevazione iniziale e settimane 1–12.
+ * I punteggi mancanti o non validi restano null: non vengono interpolati.
+ */
+export function getScentTrendPoints(baseline, weeks, scentId) {
+    const readScore = record => {
+        const score = record?.score;
+        return Number.isInteger(score) && score >= 0 && score <= 5 ? score : null;
+    };
+
+    const points = [
+        { label: 'Inizio', week: 0, score: readScore(baseline?.[scentId]) }
+    ];
+
+    for (let week = 1; week <= 12; week++) {
+        points.push({
+            label: `Settimana ${week}`,
+            week,
+            score: readScore(weeks?.[week]?.scents?.[scentId])
+        });
+    }
+
+    return points;
+}

@@ -1,4 +1,4 @@
-import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } from './src/diario-core.mjs';
+import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, isValidDiaryState } from './src/diario-core.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -762,6 +762,99 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
         }
 
         // =========================================================================
+        // GRAFICI DI ANDAMENTO DELLE VALUTAZIONI OLFATTIVE
+        // =========================================================================
+        const TREND_CHART_COLORS = {
+            emerald: '#059669',
+            amber: '#d97706',
+            pink: '#db2777',
+            orange: '#c2410c',
+            violet: '#7c3aed',
+            teal: '#0f766e',
+            lime: '#65a30d'
+        };
+
+        function buildScentTrendCard(scent) {
+            const data = getScentTrendPoints(appState.baseline, appState.weeks, scent.id);
+            const color = TREND_CHART_COLORS[scent.colorClass] || '#326747';
+            const chartId = `trend-chart-${scent.id}`;
+            const left = 48, right = 620, top = 18, bottom = 190;
+            const x = index => left + (index / 12) * (right - left);
+            const y = score => bottom - (score / 5) * (bottom - top);
+
+            const paths = [];
+            let segment = [];
+            const flushSegment = () => {
+                if (segment.length > 1) {
+                    paths.push(`<path d="${segment.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`);
+                }
+                segment = [];
+            };
+
+            data.forEach((point, index) => {
+                if (point.score === null) {
+                    flushSegment();
+                    return;
+                }
+                segment.push({ x: x(index), y: y(point.score) });
+            });
+            flushSegment();
+
+            const gridLines = Array.from({ length: 6 }, (_, score) => {
+                const yy = y(score);
+                return `<g>
+                    <line x1="${left}" y1="${yy}" x2="${right}" y2="${yy}" stroke="#e7e5e4" stroke-width="1" />
+                    <text x="32" y="${yy + 4}" text-anchor="end" fill="#78716c" font-size="12">${score}</text>
+                </g>`;
+            }).join('');
+
+            const xLabels = [
+                { index: 0, label: 'Inizio', anchor: 'start' },
+                { index: 4, label: '4', anchor: 'middle' },
+                { index: 8, label: '8', anchor: 'middle' },
+                { index: 12, label: '12', anchor: 'end' }
+            ].map(tick => `<text x="${x(tick.index)}" y="216" text-anchor="${tick.anchor}" fill="#78716c" font-size="12">${tick.label}</text>`).join('');
+
+            const markers = data.map((point, index) => {
+                if (point.score === null) return '';
+                return `<circle cx="${x(index)}" cy="${y(point.score)}" r="5" fill="${color}" stroke="#ffffff" stroke-width="2">
+                    <title>${point.label}: ${point.score} — ${SCALE_LABELS[point.score]}</title>
+                </circle>`;
+            }).join('');
+
+            const recordedCount = data.filter(point => point.score !== null).length;
+            const latest = [...data].reverse().find(point => point.score !== null);
+            const latestText = latest
+                ? `Ultimo dato: ${latest.label.toLowerCase()} · ${latest.score} — ${SCALE_LABELS[latest.score]}`
+                : 'Nessuna valutazione registrata';
+
+            const card = document.createElement('article');
+            card.className = 'diary-trend-card';
+            card.innerHTML = `
+                <div class="diary-trend-card-heading">
+                    <div class="min-w-0">
+                        <span class="inline-flex max-w-full px-2.5 py-1 rounded-full text-xs font-bold ${scent.badgeBg}">${escapeHtml(scent.name)}</span>
+                        <p class="text-xs text-stone-500 mt-1">${escapeHtml(scent.character)}</p>
+                    </div>
+                    <span class="diary-trend-count">${recordedCount}/13 dati</span>
+                </div>
+                <p class="diary-trend-latest" aria-live="polite">${latestText}</p>
+                <svg class="diary-trend-chart" viewBox="0 0 640 230" role="img" aria-labelledby="${chartId}-title ${chartId}-desc">
+                    <title id="${chartId}-title">Andamento di ${escapeHtml(scent.name)}</title>
+                    <desc id="${chartId}-desc">Valutazioni da zero a cinque dal punto di partenza alla settimana dodici. I periodi senza valutazione non sono collegati.</desc>
+                    ${gridLines}
+                    <line x1="${left}" y1="${top}" x2="${left}" y2="${bottom}" stroke="#a8a29e" stroke-width="1" />
+                    <line x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}" stroke="#a8a29e" stroke-width="1" />
+                    ${paths.join('')}
+                    ${markers}
+                    ${xLabels}
+                    ${recordedCount === 0 ? '<text x="334" y="108" text-anchor="middle" fill="#78716c" font-size="14">Le valutazioni appariranno qui</text>' : ''}
+                </svg>
+            `;
+            return card;
+        }
+
+        // =========================================================================
         // RENDERING RIEPILOGO (PAGINA 21 DEL PDF)
         // =========================================================================
         function renderSummaryView() {
@@ -772,7 +865,12 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
             }
             document.getElementById('total-sessions-stat').textContent = `${totalSessions} / 168`;
 
-            // Griglia Confronto Tappe Chiave (Inizio, Sett 4, Sett 8, Sett 12)
+            // Grafici di andamento: i punti null restano interruzioni, non valori stimati.
+            const trendsGrid = document.getElementById('summary-trends-grid');
+            trendsGrid.innerHTML = '';
+            SCENTS.forEach(scent => trendsGrid.appendChild(buildScentTrendCard(scent)));
+
+            // Griglia di dettaglio delle tappe chiave (Inizio, Settimane 4, 8 e 12).
             const milestonesGrid = document.getElementById('summary-milestones-grid');
             milestonesGrid.innerHTML = '';
 

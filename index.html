@@ -403,7 +403,7 @@
                     <div>
                         <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-botanical-100 text-botanical-800">Confronto Tappe</span>
                         <h1 class="font-serif-title text-2xl sm:text-3xl text-botanical-950 mt-2">Il tuo riepilogo olfattivo</h1>
-                        <p class="text-sm text-stone-600 mt-1">Confronto automatico tra il Punto di Partenza e le settimane 4, 8 e 12.</p>
+                        <p class="text-sm text-stone-600 mt-1">Segui come cambiano le tue valutazioni dal punto di partenza alla settimana 12. I periodi senza valutazioni restano vuoti.</p>
                     </div>
                     <div class="bg-botanical-50 px-4 py-3 rounded-2xl border border-botanical-200/70 text-right">
                         <div class="text-xs text-stone-500">Sessioni totali completate</div>
@@ -411,16 +411,31 @@
                     </div>
                 </div>
 
-                <!-- Griglia Confronto Tappe (Inizio, Sett 4, Sett 8, Sett 12) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6" id="summary-milestones-grid">
-                    <!-- Generato via JS -->
-                </div>
+                <!-- Grafici di andamento dei quattro profumi -->
+                <section aria-labelledby="summary-trends-title" class="mt-6">
+                    <div class="mb-4">
+                        <h2 id="summary-trends-title" class="text-lg font-bold text-stone-900">Andamento dei quattro profumi</h2>
+                        <p class="text-sm text-stone-600 mt-1">Ogni punto rappresenta una valutazione registrata: Inizio e settimane 1–12.</p>
+                    </div>
+                    <div id="summary-trends-grid" class="diary-trends-grid">
+                        <!-- Generato via JS -->
+                    </div>
+                    <p class="text-xs text-stone-500 mt-3">Scala personale: 0 = nessun odore · 5 = molto forte. I tratti si interrompono dove manca una valutazione; il grafico non interpola i dati assenti.</p>
+                </section>
 
-                <!-- Tabella Completa 12 Settimane -->
-                <div class="mt-8 pt-6 border-t border-stone-100">
-                    <h3 class="text-base font-bold text-stone-900 mb-4">Andamento completo delle 12 settimane</h3>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-sm">
+                <!-- Dettaglio delle tappe chiave -->
+                <details class="diary-summary-details mt-6">
+                    <summary>Confronto delle tappe principali (inizio, settimane 4, 8 e 12)</summary>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4" id="summary-milestones-grid">
+                        <!-- Generato via JS -->
+                    </div>
+                </details>
+
+                <!-- Tabella completa, consultabile su richiesta -->
+                <details class="diary-summary-details mt-4">
+                    <summary>Tabella completa delle 12 settimane</summary>
+                    <div class="overflow-x-auto mt-4">
+                        <table class="w-full text-left border-collapse text-sm" aria-label="Sessioni e valutazioni per settimana">
                             <thead>
                                 <tr class="border-b border-stone-200 text-xs uppercase text-stone-500">
                                     <th class="py-3 px-3">Tappa</th>
@@ -436,7 +451,7 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </details>
 
                 <!-- Riflessione Finale (Pagina 21-22) -->
                 <div class="mt-8 pt-6 border-t border-stone-100 grid grid-cols-1 md:grid-cols-2 gap-4">
