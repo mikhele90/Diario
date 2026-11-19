@@ -13,7 +13,7 @@ const [html, app, styles, serviceWorker] = await Promise.all([
 
 test('il Calendario espone un ritorno rapido alla settimana corrente', () => {
     assert.match(html, /id="btn-go-today"[^>]*onclick="goToToday\(\)"/);
-    assert.match(html, /id="btn-go-today"[^>]*\\bflex\\b/);
+    assert.match(html, /id="btn-go-today"[^>]*\bflex\b/);
     assert.match(app, /function goToToday\(\)\s*\{/);
     assert.match(app, /goToToday,/);
     assert.match(app, /todayButton\.classList\.toggle\('hidden', todayWeek === -1 \|\| \(w === todayWeek && !inPause\)\)/);
