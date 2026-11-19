@@ -79,3 +79,31 @@
         transition: none;
     }
 }
+
+
+/* Scheda Percorso: campi e azioni comodi anche su schermi touch */
+.diary-setup-field {
+    min-height: 44px;
+}
+
+.diary-secondary-action,
+.diary-file-action {
+    min-height: 44px;
+}
+
+.diary-file-action:focus-within {
+    outline: 3px solid #6b9b7a;
+    outline-offset: 2px;
+}
+
+.diary-setup-field:focus-visible {
+    outline: 3px solid #6b9b7a;
+    outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+    .diary-secondary-action,
+    .diary-file-action {
+        width: 100%;
+    }
+}
