@@ -48,7 +48,7 @@ test('i quattro profumi usano il colore coerente con il set attivo', () => {
 });
 
 test('la cache PWA è aggiornata e precarica i file del riepilogo', () => {
-    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v12'/);
+    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v13'/);
     for (const file of ['index.html', 'styles.css', 'app.js', 'src/diario-core.mjs']) {
         assert.ok(serviceWorker.includes(file), `File non precaricato: ${file}`);
     }
