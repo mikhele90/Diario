@@ -29,7 +29,7 @@ test('ogni grafico è accessibile e usa una scala fissa da 0 a 5', () => {
 test('le lacune interrompono il tracciato e non vengono unite da linee stimate', () => {
     assert.match(app, /if \(point\.score === null\)\s*\{\s*flushSegment\(\);\s*return;/);
     assert.match(html, /I tratti si interrompono dove manca una valutazione/);
-    assert.match(app, /I punti null restano interruzioni, non valori stimati/);
+    assert.match(app, /i punti null restano interruzioni, non valori stimati/);
 });
 
 test('le tappe principali e la tabella restano disponibili in sezioni espandibili', () => {
