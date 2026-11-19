@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
     escapeHtml,
     getRitualPosition,
+    getScentTrendPoints,
     hasAnyDiaryData,
     isValidDiaryState
 } from '../src/diario-core.mjs';
@@ -210,4 +211,64 @@ test('il calcolo del calendario resta stabile durante il cambio ora legale', () 
         getRitualPosition('2026-03-28', localDate(2026, 3, 29)),
         { week: 1, dayIndex: 1 }
     );
+});
+
+
+test('serie olfattiva contiene il punto iniziale e le dodici settimane in ordine', () => {
+    const weeks = Object.fromEntries(
+        Array.from({ length: 12 }, (_, index) => [index + 1, {
+            scents: { eucalipto: { score: index % 6, impression: '' } }
+        }])
+    );
+    const points = getScentTrendPoints(
+        { eucalipto: { score: 5 } },
+        weeks,
+        'eucalipto'
+    );
+    assert.equal(points.length, 13);
+    assert.deepEqual(points[0], { label: 'Inizio', week: 0, score: 5 });
+    assert.deepEqual(points[1], { label: 'Settimana 1', week: 1, score: 0 });
+    assert.deepEqual(points[12], { label: 'Settimana 12', week: 12, score: 5 });
+});
+
+test('la serie conserva lo zero come valutazione e non lo confonde con un dato mancante', () => {
+    const points = getScentTrendPoints(
+        { eucalipto: { score: 0 } },
+        { 1: { scents: { eucalipto: { score: 0 } } } },
+        'eucalipto'
+    );
+    assert.equal(points[0].score, 0);
+    assert.equal(points[1].score, 0);
+});
+
+test('la serie mantiene null per le settimane non valutate senza interpolare i dati', () => {
+    const points = getScentTrendPoints(
+        { eucalipto: { score: null } },
+        {
+            1: { scents: { eucalipto: { score: 2 } } },
+            2: { scents: { eucalipto: { score: null } } },
+            3: { scents: { eucalipto: { score: 4 } } }
+        },
+        'eucalipto'
+    );
+    assert.equal(points[0].score, null);
+    assert.equal(points[1].score, 2);
+    assert.equal(points[2].score, null);
+    assert.equal(points[3].score, 4);
+    assert.equal(points[4].score, null);
+});
+
+test('la serie gestisce in modo sicuro campi mancanti e punteggi non validi', () => {
+    const points = getScentTrendPoints(
+        null,
+        {
+            1: { scents: { eucalipto: { score: 7 } } },
+            2: { scents: { eucalipto: { score: '3' } } }
+        },
+        'eucalipto'
+    );
+    assert.equal(points[0].score, null);
+    assert.equal(points[1].score, null);
+    assert.equal(points[2].score, null);
+    assert.equal(points[12].score, null);
 });
