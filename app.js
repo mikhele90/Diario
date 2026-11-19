@@ -741,7 +741,7 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                 for (let val = 0; val <= 5; val++) {
                     const isSelected = bData.score === val;
                     btns += `
-                        <button onclick="setBaselineScore('${scent.id}', ${val})" class="flex-1 py-2 rounded-xl text-xs font-bold border transition ${
+                        <button onclick="setBaselineScore('${scent.id}', ${val})" aria-label="Valutazione iniziale ${scent.name}: ${val} - ${SCALE_LABELS[val]}" aria-pressed="${isSelected}" class="diary-score-button flex-1 py-2 rounded-xl text-xs font-bold border transition ${
                             isSelected ? scent.activeBtn : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'
                         }">${val}</button>
                     `;
@@ -752,10 +752,10 @@ import { escapeHtml, getRitualPosition, hasAnyDiaryData, isValidDiaryState } fro
                 card.innerHTML = `
                     <div class="flex items-center justify-between">
                         <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${scent.badgeBg}">${scent.name}</span>
-                        <span class="text-xs text-stone-500">${bData.score !== null ? SCALE_LABELS[bData.score] : 'Non valutato'}</span>
+                        <span class="text-xs text-stone-500" aria-live="polite">${bData.score !== null ? `${bData.score} — ${SCALE_LABELS[bData.score]}` : 'Non valutato'}</span>
                     </div>
-                    <div class="flex gap-1.5">${btns}</div>
-                    <input type="text" value="${escapeHtml(bData.impression)}" oninput="setBaselineImpression('${scent.id}', this.value)" placeholder="Impressione iniziale..." class="w-full text-xs sm:text-sm rounded-xl border border-stone-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-botanical-500">
+                    <div class="flex gap-1.5" role="group" aria-label="Scala di intensità iniziale per ${scent.name}, da 0 a 5">${btns}</div>
+                    <input type="text" aria-label="Impressione iniziale per ${scent.name}" value="${escapeHtml(bData.impression)}" oninput="setBaselineImpression('${scent.id}', this.value)" placeholder="Descrivi cosa percepisci..." class="w-full text-sm rounded-xl border border-stone-200 bg-white px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-botanical-500">
                 `;
                 container.appendChild(card);
             });
