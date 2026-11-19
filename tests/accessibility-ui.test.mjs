@@ -63,7 +63,7 @@ test('i pulsanti con sola icona hanno un target touch minimo di 44 × 44 px', ()
         assert.match(html, new RegExp(`id="${id}"[^>]*class="diary-icon-button`));
     }
     assert.match(html, /aria-label="Chiudi sessione guidata"[^>]*class="diary-icon-button/);
-    assert.match(styles, /\\.diary-icon-button\\s*\\{[^}]*min-width:\\s*44px;[^}]*min-height:\\s*44px;/s);
+    assert.match(styles, /\.diary-icon-button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/s);
 });
 
 test('la nuova versione della cache PWA serve le modifiche di accessibilità', () => {
