@@ -46,3 +46,9 @@ test('la nuova interfaccia è servita anche dopo l’aggiornamento della cache P
         assert.match(serviceWorker, new RegExp(file.replace('.', '\.') ));
     }
 });
+
+test('il collegamento rapido usa un’icona già inclusa nell’app', () => {
+    assert.match(html, /data-lucide="calendar"/);
+    assert.doesNotMatch(html, /data-lucide="calendar-check"/);
+    assert.match(app, /"calendar":/);
+});
