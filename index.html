@@ -588,14 +588,14 @@
     <!-- ========================================================= -->
     <!-- MODALE TIMER GUIDATO DEL RITUALE (20s annusa / 10s pausa) -->
     <!-- ========================================================= -->
-    <div id="ritual-modal" role="dialog" aria-modal="true" aria-labelledby="timer-scent-name" aria-describedby="timer-scent-hint" tabindex="-1" class="fixed inset-0 z-50 hidden bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="ritual-modal" role="dialog" aria-modal="true" aria-labelledby="ritual-dialog-title" aria-describedby="timer-scent-hint" tabindex="-1" class="fixed inset-0 z-50 hidden bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="diary-dialog-panel bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-botanical-200 relative">
             <button type="button" aria-label="Chiudi sessione guidata" onclick="closeRitualModal()" class="absolute top-5 right-5 p-2 rounded-full hover:bg-stone-100 text-stone-500">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
 
             <div class="text-center space-y-2">
-                <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-botanical-100 text-botanical-800">Sessione Guidata (~2 min)</span>
+                <span id="ritual-dialog-title" class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-botanical-100 text-botanical-800">Sessione Guidata (~2 min)</span>
                 <h3 id="timer-scent-name" class="font-serif-title text-2xl sm:text-3xl text-stone-900 pt-1">Eucalipto</h3>
                 <p id="timer-scent-hint" class="text-xs sm:text-sm text-stone-500">Fresco e deciso • Immagina le foglie di eucalipto</p>
             </div>
