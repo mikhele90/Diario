@@ -347,7 +347,7 @@
             </section>
 
             <!-- KIT E PROTEZIONE DEI DATI -->
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div class="diary-tools-grid">
                 <section aria-labelledby="refill-section-title" class="bg-white rounded-2xl p-5 sm:p-6 border border-botanical-200/80 shadow-sm flex flex-col">
                     <div class="flex items-start gap-3 mb-3">
                         <div class="p-2.5 rounded-xl bg-botanical-100 text-botanical-800 shrink-0">
@@ -382,9 +382,10 @@
                             <i data-lucide="download" class="w-4 h-4"></i>
                             <span>Scarica o condividi backup</span>
                         </button>
-                        <label for="backup-file-input" class="diary-file-action inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-stone-200 hover:bg-stone-50 text-sm font-semibold text-stone-700 transition cursor-pointer">
+                        <label class="diary-file-action inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-stone-200 hover:bg-stone-50 text-sm font-semibold text-stone-700 transition cursor-pointer">
                             <i data-lucide="upload" class="w-4 h-4"></i>
                             <span>Ripristina da file</span>
+                            <input id="backup-file-input" type="file" accept=".json,.txt,application/json,text/plain" onchange="importData(event)" class="diary-visually-hidden">
                         </label>
                         <input id="backup-file-input" type="file" accept=".json,.txt,application/json,text/plain" onchange="importData(event)" class="sr-only">
                     </div>

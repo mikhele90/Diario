@@ -54,8 +54,9 @@ test('kit e backup sono sezioni separate con gli stessi comandi esistenti', () =
 });
 
 test('il ripristino da file resta accessibile e la spiegazione dei dati locali è presente', () => {
-    assert.match(routeView, /for="backup-file-input"/);
-    assert.match(routeView, /id="backup-file-input"[^>]*class="sr-only"/);
+    assert.match(routeView, /<label class="diary-file-action[^"]*">[\\s\\S]*?<input id="backup-file-input"[^>]*class="diary-visually-hidden">[\\s\\S]*?<\\/label>/);
+    assert.match(styles, /\\.diary-visually-hidden\\s*\\{[^}]*clip:\s*rect\\(0, 0, 0, 0\\)/s);
+    assert.match(styles, /\\.diary-tools-grid\\s*\\{/);
     assert.match(routeView, /aria-live="polite"/);
     assert.match(routeView, /non viene inviato a un server/);
     assert.match(routeView, /sostituisce i dati attuali dopo una richiesta di conferma/);

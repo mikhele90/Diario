@@ -82,6 +82,29 @@
 
 
 /* Scheda Percorso: campi e azioni comodi anche su schermi touch */
+.diary-tools-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+}
+
+@media (min-width: 1280px) {
+    .diary-tools-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.diary-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
 .diary-setup-field {
     min-height: 44px;
 }
