@@ -45,20 +45,20 @@
 
         <!-- Barra di Navigazione Tab -->
         <div class="bg-botanical-50/90 border-t border-botanical-100 px-3 py-1.5">
-            <nav class="max-w-6xl mx-auto grid grid-cols-4 gap-1 bg-botanical-200/50 p-1 rounded-xl">
-                <button id="nav-calendario" onclick="switchTab('calendario')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold bg-white text-botanical-900 shadow-sm transition flex items-center justify-center gap-1.5">
+            <nav aria-label="Navigazione principale" class="diary-main-nav max-w-6xl mx-auto grid grid-cols-4 gap-1 bg-botanical-200/50 p-1 rounded-xl">
+                <button id="nav-calendario" aria-controls="view-calendario" aria-current="page" onclick="switchTab('calendario')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold bg-white text-botanical-900 shadow-sm transition flex items-center justify-center gap-1.5">
                     <i data-lucide="calendar" class="w-3.5 h-3.5 shrink-0"></i>
                     <span>Calendario</span>
                 </button>
-                <button id="nav-partenza" onclick="switchTab('partenza')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold text-stone-600 hover:text-botanical-900 transition flex items-center justify-center gap-1.5">
+                <button id="nav-partenza" aria-controls="view-partenza" onclick="switchTab('partenza')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold text-stone-600 hover:text-botanical-900 transition flex items-center justify-center gap-1.5">
                     <i data-lucide="compass" class="w-3.5 h-3.5 shrink-0"></i>
                     <span>Percorso</span>
                 </button>
-                <button id="nav-riepilogo" onclick="switchTab('riepilogo')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold text-stone-600 hover:text-botanical-900 transition flex items-center justify-center gap-1.5">
+                <button id="nav-riepilogo" aria-controls="view-riepilogo" onclick="switchTab('riepilogo')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold text-stone-600 hover:text-botanical-900 transition flex items-center justify-center gap-1.5">
                     <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 shrink-0"></i>
                     <span>Riepilogo</span>
                 </button>
-                <button id="nav-guida" onclick="switchTab('guida')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold text-stone-600 hover:text-botanical-900 transition flex items-center justify-center gap-1.5">
+                <button id="nav-guida" aria-controls="view-guida" onclick="switchTab('guida')" class="py-1.5 px-2 rounded-lg text-xs sm:text-sm font-semibold text-stone-600 hover:text-botanical-900 transition flex items-center justify-center gap-1.5">
                     <i data-lucide="book-open" class="w-3.5 h-3.5 shrink-0"></i>
                     <span>Guida</span>
                 </button>
@@ -588,14 +588,14 @@
     <!-- ========================================================= -->
     <!-- MODALE TIMER GUIDATO DEL RITUALE (20s annusa / 10s pausa) -->
     <!-- ========================================================= -->
-    <div id="ritual-modal" class="fixed inset-0 z-50 hidden bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-botanical-200 relative">
-            <button onclick="closeRitualModal()" class="absolute top-5 right-5 p-2 rounded-full hover:bg-stone-100 text-stone-500">
+    <div id="ritual-modal" role="dialog" aria-modal="true" aria-labelledby="ritual-dialog-title" aria-describedby="timer-scent-hint" tabindex="-1" class="fixed inset-0 z-50 hidden bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="diary-dialog-panel bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-botanical-200 relative">
+            <button type="button" aria-label="Chiudi sessione guidata" onclick="closeRitualModal()" class="absolute top-5 right-5 p-2 rounded-full hover:bg-stone-100 text-stone-500">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
 
             <div class="text-center space-y-2">
-                <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-botanical-100 text-botanical-800">Sessione Guidata (~2 min)</span>
+                <span id="ritual-dialog-title" class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-botanical-100 text-botanical-800">Sessione Guidata (~2 min)</span>
                 <h3 id="timer-scent-name" class="font-serif-title text-2xl sm:text-3xl text-stone-900 pt-1">Eucalipto</h3>
                 <p id="timer-scent-hint" class="text-xs sm:text-sm text-stone-500">Fresco e deciso • Immagina le foglie di eucalipto</p>
             </div>
@@ -648,16 +648,16 @@
     </div>
 
     <!-- TOAST NOTIFICA -->
-    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-stone-900 text-white text-xs sm:text-sm px-4 py-3 rounded-xl shadow-lg flex items-center gap-2">
+    <div id="toast" role="status" aria-live="polite" aria-atomic="true" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-stone-900 text-white text-xs sm:text-sm px-4 py-3 rounded-xl shadow-lg flex items-center gap-2">
         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
         <span id="toast-message">Salvato</span>
     </div>
 
-        <div id="newpath-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
-        <div class="w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 class="font-serif-title text-xl text-botanical-950">Iniziare un nuovo percorso?</h2>
+        <div id="newpath-modal" role="dialog" aria-modal="true" aria-labelledby="newpath-dialog-title" aria-describedby="newpath-dialog-description" tabindex="-1" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+        <div class="diary-dialog-panel w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 id="newpath-dialog-title" class="font-serif-title text-xl text-botanical-950">Iniziare un nuovo percorso?</h2>
             <p id="np-warning" class="hidden text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2"></p>
-            <div class="text-sm text-stone-600 space-y-2">
+            <div id="newpath-dialog-description" class="text-sm text-stone-600 space-y-2">
                 <p><strong class="text-stone-900">Si archivia:</strong> sessioni, note, punteggi e riflessioni di questo percorso. Restano consultabili in "Percorsi precedenti".</p>
                 <p><strong class="text-stone-900">Si azzera:</strong> calendario, punteggi e punto di partenza, con nuova data di inizio e <span id="np-set"></span>.</p>
                 <p>Nome e orari restano. Prima di archiviare conviene fare un backup.</p>
@@ -665,7 +665,7 @@
             <div class="flex flex-col gap-2">
                 <button onclick="exportData()" class="px-4 py-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-sm font-medium text-stone-700 transition">Condividi backup</button>
                 <button onclick="confirmNewPath()" class="px-4 py-2.5 rounded-xl bg-botanical-800 hover:bg-botanical-900 text-white text-sm font-medium transition">Archivia e riparti</button>
-                <button onclick="closeNewPathDialog()" class="px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100 transition">Annulla</button>
+                <button id="newpath-dialog-cancel" data-dialog-initial-focus type="button" onclick="closeNewPathDialog()" class="px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100 transition">Annulla</button>
             </div>
         </div>
     </div>

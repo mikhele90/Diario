@@ -202,3 +202,19 @@
     outline-offset: 3px;
     border-radius: 0.5rem;
 }
+
+/* Rifinitura accessibilità trasversale */
+.diary-main-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .diary-main-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+button:not(.diary-session-toggle):not(.diary-score-button) { min-height: 44px; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid #6b9b7a; outline-offset: 2px; }
+.diary-dialog-panel { max-height: calc(100vh - 2rem); overflow-y: auto; overscroll-behavior: contain; }
+body.diary-modal-open { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

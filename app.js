@@ -312,6 +312,63 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             renderArchive();
             lucide.createIcons();
         }
+        // =========================================================================
+        // ACCESSIBILITÀ MODALI: focus iniziale, contenimento, Esc e ripristino
+        // =========================================================================
+        const MODAL_FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+        let activeModal = null;
+        let modalReturnFocus = null;
+
+        function getModalFocusableElements(modal) {
+            return Array.from(modal.querySelectorAll(MODAL_FOCUSABLE_SELECTOR)).filter(element =>
+                !element.disabled && element.tabIndex >= 0 && !element.closest('.hidden') && element.getAttribute('aria-hidden') !== 'true'
+            );
+        }
+
+        function openAccessibleModal(modal, initialFocusSelector) {
+            if (!modal) return;
+            if (activeModal && activeModal !== modal) { activeModal.classList.add('hidden'); activeModal = null; }
+            if (!modalReturnFocus) {
+                const current = document.activeElement;
+                modalReturnFocus = current && typeof current.focus === 'function' ? current : null;
+            }
+            activeModal = modal;
+            modal.classList.remove('hidden');
+            document.body.classList.add('diary-modal-open');
+            const initialTarget = initialFocusSelector ? modal.querySelector(initialFocusSelector) : getModalFocusableElements(modal)[0];
+            (initialTarget || modal).focus();
+        }
+
+        function closeAccessibleModal(modal) {
+            if (!modal) return;
+            const wasActive = activeModal === modal;
+            modal.classList.add('hidden');
+            if (!wasActive) return;
+            activeModal = null;
+            document.body.classList.remove('diary-modal-open');
+            const returnTarget = modalReturnFocus;
+            modalReturnFocus = null;
+            const fallbackTarget = document.getElementById('nav-' + activeTab);
+            const target = returnTarget && returnTarget.isConnected && !returnTarget.disabled && !returnTarget.closest('.hidden') ? returnTarget : fallbackTarget;
+            if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
+        }
+
+        document.addEventListener('keydown', event => {
+            const modal = activeModal;
+            if (!modal) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                if (modal.id === 'ritual-modal') closeRitualModal();
+                else if (modal.id === 'newpath-modal') closeNewPathDialog();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const focusable = getModalFocusableElements(modal);
+            if (focusable.length === 0) { event.preventDefault(); modal.focus(); return; }
+            const first = focusable[0], last = focusable[focusable.length - 1];
+            if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+        });
         let pendingSet = null;
         function openNewPathDialog(targetSet) {
             pendingSet = targetSet;
@@ -322,13 +379,13 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 warn.classList.remove('hidden');
             } else warn.classList.add('hidden');
             document.getElementById('np-set').textContent = `i profumi del ${(SET_DEFS[targetSet] || SET_DEFS.set01).name}`;
-            document.getElementById('newpath-modal').classList.remove('hidden');
+            openAccessibleModal(document.getElementById('newpath-modal'), '#newpath-dialog-cancel');
         }
         function openCurrentSetNewPathDialog() {
             openNewPathDialog(appState.setId);
         }
 
-        function closeNewPathDialog() { pendingSet = null; document.getElementById('newpath-modal').classList.add('hidden'); }
+        function closeNewPathDialog() { pendingSet = null; closeAccessibleModal(document.getElementById('newpath-modal')); }
         function confirmNewPath() { const t = pendingSet; closeNewPathDialog(); if (t) startNewPath(t); }
         function startNewPath(targetSet) {
             const prev = appState;
@@ -344,6 +401,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             saveNow();
             applySetStatics();
             switchTab('partenza');
+            document.getElementById('nav-partenza').focus({ preventScroll: true });
             showToast('Nuovo percorso iniziato: compila il punto di partenza');
         }
 
@@ -460,12 +518,14 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 const btn = document.getElementById(`nav-${t}`);
                 btn.classList.remove('bg-white', 'text-botanical-900', 'shadow-sm');
                 btn.classList.add('text-stone-600');
+                btn.removeAttribute('aria-current');
             });
 
             document.getElementById(`view-${tabName}`).classList.remove('hidden');
             const activeBtn = document.getElementById(`nav-${tabName}`);
             activeBtn.classList.add('bg-white', 'text-botanical-900', 'shadow-sm');
             activeBtn.classList.remove('text-stone-600');
+            activeBtn.setAttribute('aria-current', 'page');
 
             renderActiveTab();
         }
@@ -586,6 +646,8 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                     pb.onclick = () => selectPause(i);
                     pb.className = `px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border border-dashed ${pSel ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'}`;
                     pb.textContent = 'Pausa';
+                    pb.setAttribute('aria-label', `Apri la pausa dopo la settimana ${i}`);
+                    if (pSel) pb.setAttribute('aria-current', 'step');
                     if (pSel) selectedPillEl = pb;
                     pillsContainer.appendChild(pb);
                 }
@@ -713,7 +775,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                         ${scaleButtonsHtml}
                     </div>
                     <div>
-                        <input type="text" value="${escapeHtml(sData.impression)}" oninput="setScentImpression(${w}, '${scent.id}', this.value)" placeholder="Impressione (es. debole, agrumato, insolito, ancora nulla...)" class="w-full text-xs sm:text-sm rounded-xl border border-stone-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-botanical-500">
+                        <input type="text" aria-label="Impressione per ${escapeHtml(scent.name)}, settimana ${w}" value="${escapeHtml(sData.impression)}" oninput="setScentImpression(${w}, '${scent.id}', this.value)" placeholder="Impressione (es. debole, agrumato, insolito, ancora nulla...)" class="w-full text-xs sm:text-sm rounded-xl border border-stone-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-botanical-500">
                     </div>
                 `;
                 scentsContainer.appendChild(card);
@@ -1109,13 +1171,13 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
 
         function openRitualModal() {
             resetTimerState();
-            document.getElementById('ritual-modal').classList.remove('hidden');
+            openAccessibleModal(document.getElementById('ritual-modal'), '#btn-timer-toggle');
             lucide.createIcons();
         }
 
         function closeRitualModal() {
             stopTimer();
-            document.getElementById('ritual-modal').classList.add('hidden');
+            closeAccessibleModal(document.getElementById('ritual-modal'));
         }
 
         function resetTimerState() {
