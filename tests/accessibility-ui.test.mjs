@@ -58,6 +58,14 @@ test('touch target, focus visibile, mobile nav e movimento ridotto sono coerenti
     assert.match(styles, /body\.diary-modal-open\s*\{\s*overflow:\s*hidden/);
 });
 
+test('i pulsanti con sola icona hanno un target touch minimo di 44 × 44 px', () => {
+    for (const id of ['btn-prev-week', 'btn-next-week']) {
+        assert.match(html, new RegExp(`id="${id}"[^>]*class="diary-icon-button`));
+    }
+    assert.match(html, /aria-label="Chiudi sessione guidata"[^>]*class="diary-icon-button/);
+    assert.match(styles, /\\.diary-icon-button\\s*\\{[^}]*min-width:\\s*44px;[^}]*min-height:\\s*44px;/s);
+});
+
 test('la nuova versione della cache PWA serve le modifiche di accessibilità', () => {
     assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v13'/);
     for (const file of ['index.html', 'styles.css', 'app.js']) {
