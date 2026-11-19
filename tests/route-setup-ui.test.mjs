@@ -12,7 +12,6 @@ const [html, app, styles, serviceWorker] = await Promise.all([
 ]);
 
 const sectionStart = html.indexOf('<section id="view-partenza"');
-const sectionEnd = html.indexOf('</section>', sectionStart);
 const routeView = html.slice(sectionStart, html.indexOf('<!-- ========================================================= -->', sectionStart + 1));
 
 test('la navigazione mantiene la tab tecnica e presenta il nome Percorso', () => {
@@ -78,4 +77,5 @@ test('la UI della scheda Percorso è disponibile anche dopo l’aggiornamento PW
 test('gli identificativi HTML restano univoci', () => {
     const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
     assert.equal(ids.length, new Set(ids).size, 'Non devono esserci ID duplicati');
+    assert.doesNotMatch(html, /class="sr-only"/);
 });
