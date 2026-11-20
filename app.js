@@ -703,7 +703,11 @@ function applySetStatics() {
                 console.error('Errore lettura dati locali:', err);
                 if (raw !== null) {
                     pendingCorruptRaw = raw;
-                    storageRecoveryBlocked = !preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw);
+                    let preserved = false;
+                    try { preserved = preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw); } catch (copyError) {
+                        console.error('Impossibile conservare la copia di sicurezza:', copyError);
+                    }
+                    storageRecoveryBlocked = !preserved;
                     if (!storageRecoveryBlocked) pendingCorruptRaw = null;
                 }
             }
