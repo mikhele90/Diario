@@ -187,6 +187,84 @@ export function hasAnyDiaryData(appState, today = localDateString()) {
 }
 
 /**
+ * Indica se un percorso contiene attività reale, escludendo preferenze e metadati.
+ */
+export function hasPathProgress(state) {
+    if (!state || typeof state !== 'object') return false;
+    const hasText = value => typeof value === 'string' && value.trim().length > 0;
+    const hasRecords = records => Object.values(records || {}).some(item =>
+        item && ((item.score !== null && item.score !== undefined) || hasText(item.impression))
+    );
+    const weekData = Object.values(state.weeks || {}).some(week => week && (
+        (Array.isArray(week.days) && week.days.some(day => day && (day.morning || day.evening))) ||
+        hasRecords(week.scents) || hasText(week.reflection) || hasText(week.otherNotes)
+    ));
+    const pauseData = Object.values(state.pauses || {}).some(pause =>
+        pause && Object.values(pause).some(hasText)
+    );
+    const profile = state.profile || {};
+    return weekData || hasRecords(state.baseline) || pauseData ||
+        hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep);
+}
+
+/** Associa l'indice originale a ogni voce prima di invertirne l'ordine di visualizzazione. */
+export function getArchiveEntriesNewestFirst(archive) {
+    return (Array.isArray(archive) ? archive : [])
+        .map((entry, index) => ({ entry, index }))
+        .reverse();
+}
+
+/**
+ * Riprende una voce dell'archivio senza perdere il percorso corrente né le preferenze globali.
+ * Restituisce null per una voce non valida o quando l'archivio è al limite e non può contenere
+ * anche il percorso corrente.
+ */
+export function restoreArchivedPath(currentState, archiveIndex, archivedAt = new Date().toISOString()) {
+    if (!currentState || typeof currentState !== 'object' ||
+        !Array.isArray(currentState.archive) ||
+        !Number.isInteger(archiveIndex) || archiveIndex < 0 || archiveIndex >= currentState.archive.length) {
+        return null;
+    }
+    const entry = currentState.archive[archiveIndex];
+    if (!entry || !['set01', 'set02'].includes(entry.setId) ||
+        !isValidDiaryState(entry.state, false) ||
+        typeof archivedAt !== 'string' || !Number.isFinite(Date.parse(archivedAt))) {
+        return null;
+    }
+
+    const clone = value => JSON.parse(JSON.stringify(value));
+    const nextArchive = currentState.archive.slice();
+    nextArchive.splice(archiveIndex, 1);
+    const currentHasProgress = hasPathProgress(currentState);
+    if (currentHasProgress) {
+        if (nextArchive.length >= 500) return null;
+        const previous = clone(currentState);
+        delete previous.archive;
+        nextArchive.push({
+            archivedAt,
+            setId: currentState.setId,
+            state: previous
+        });
+    }
+
+    const restored = clone(entry.state);
+    restored.archive = nextArchive;
+    restored.setId = entry.setId;
+    restored.profile = restored.profile || {};
+    const currentProfile = currentState.profile || {};
+    for (const key of ['name', 'morningTime', 'eveningTime']) {
+        if (typeof currentProfile[key] === 'string') restored.profile[key] = currentProfile[key];
+    }
+    if (currentState.setId === restored.setId && currentState.refill &&
+        (currentState.refill.last === null ||
+            (typeof currentState.refill.last === 'string' &&
+                /^\d{4}-\d{2}-\d{2}$/.test(currentState.refill.last)))) {
+        restored.refill = clone(currentState.refill);
+    }
+    return restored;
+}
+
+/**
  * Restituisce la posizione del giorno corrente nel percorso:
  * { week: 1..12, dayIndex: 0..6 }, oppure null fuori dal percorso.
  * Usa giorni UTC costruiti dai componenti locali della data per evitare
