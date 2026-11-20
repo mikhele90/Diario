@@ -102,3 +102,14 @@ test('accetta una copia precedente identica senza tentare una nuova scrittura', 
     assert.equal(preserveCorruptSnapshot(storage, 'backup', raw), true);
     assert.equal(writes, 0);
 });
+
+
+test('pagehide e cambio visibilità non provocano una scrittura se non c’è un salvataggio pendente', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const start = app.indexOf('function flushSave()');
+    const end = app.indexOf('const BACKUP_KEY', start);
+    const flush = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.match(flush, /if \(!saveTimeout\) return/);
+    assert.match(flush, /if \(!storageRecoveryBlocked\) saveNow\(\)/);
+});
