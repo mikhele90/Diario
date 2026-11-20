@@ -392,17 +392,6 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
         }
 
         
-            const set = SET_DEFS[appState.setId] || SET_DEFS.set01;
-            ['set-badge', 'guide-set-badge'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = set.name; });
-            document.querySelectorAll('[data-scent-th]').forEach(th => { th.textContent = SCENTS[+th.dataset.scentTh].name.split(' ')[0]; });
-            const gs = document.getElementById('guide-scents');
-            if (gs) gs.innerHTML = SCENTS.map(x => { const p = PALETTE[x.colorClass]; return `<div class="p-5 rounded-2xl ${p.c} flex gap-4"><div class="w-12 h-12 rounded-2xl ${p.i} flex items-center justify-center shrink-0"><i data-lucide="sprout" class="w-6 h-6"></i></div><div><h3 class="font-bold text-stone-900 text-base">${x.name}</h3><p class="text-xs font-semibold ${p.t} mt-0.5">${x.character}</p><p class="text-sm text-stone-600 mt-2">${x.hint}</p></div></div>`; }).join('');
-            const oh = [...document.querySelectorAll('h3')].find(e => e.textContent.trim() === 'I tuoi quattro oli');
-            if (oh && oh.parentElement) oh.parentElement.classList.toggle('hidden', appState.setId !== 'set01');
-            renderNextChoice();
-            renderArchive();
-            lucide.createIcons();
-        }
 function applySetStatics() {
             const set = SET_DEFS[appState.setId] || SET_DEFS.set01;
             ['set-badge', 'guide-set-badge'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = set.name; });
