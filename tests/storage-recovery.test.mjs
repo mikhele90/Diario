@@ -187,7 +187,8 @@ test('se una chiave locale non è leggibile, il diario resta bloccato e non salv
     const init = app.slice(start, end);
 
     assert.ok(start >= 0 && end > start);
-    assert.match(init, /stored\.unreadableKeys\.length > 0/);
+    assert.match(init, /primaryUnreadable/);
+    assert.match(init, /alternativeUnreadableWithoutProgress/);
     assert.match(init, /storageRecoveryBlocked = recoveryRequired/);
     assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\('error'\);/);
     assert.match(init, /shouldWriteInitialState\(\{ loaded, fromLegacy, recoveryRequired \}\)/);
