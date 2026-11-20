@@ -74,3 +74,14 @@ test('l’esportazione non sblocca da sola la sovrascrittura: serve una conferma
     assert.doesNotMatch(flow, /storageRecoveryBlocked = false/);
     assert.match(app, /onclick="confirmCorruptRecovery\(\)"/);
 });
+
+
+test('se la lettura dello storage fallisce, l’avvio non scrive sopra dati non verificabili', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const start = app.indexOf('function initLocalSave()');
+    const end = app.indexOf('function renderActiveTab()', start);
+    const init = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.match(init, /else \{\s*\/\/ Non possiamo sapere se esistano dati[\s\S]*?storageRecoveryBlocked = true;/);
+    assert.ok(init.indexOf('storageRecoveryBlocked = true') < init.indexOf('saveNow()'));
+});
