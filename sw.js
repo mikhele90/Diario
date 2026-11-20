@@ -35,7 +35,7 @@ function networkFirst(request, cacheKey = request) {
 }
 
 function isRefreshableAsset(pathname) {
-  return /\\/(?:app\\.js|styles\\.css|manifest\\.webmanifest|icon\\.svg|icon-maskable\\.svg|src\\/diario-core\\.mjs)$/.test(pathname);
+  return /\/(?:app\.js|styles\.css|manifest\.webmanifest|icon\.svg|icon-maskable\.svg|src\/diario-core\.mjs)$/.test(pathname);
 }
 
 self.addEventListener('fetch', event => {
