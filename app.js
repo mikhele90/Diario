@@ -719,6 +719,10 @@ function applySetStatics() {
                     }
                     storageRecoveryBlocked = !preserved;
                     if (!storageRecoveryBlocked) pendingCorruptRaw = null;
+                } else {
+                    // Non possiamo sapere se esistano dati se il browser nega la lettura:
+                    // non scrivere mai lo stato vuoto in questa condizione.
+                    storageRecoveryBlocked = true;
                 }
             }
             if (loaded && !fromLegacy) updateSyncBadge('saved'); else saveNow();
