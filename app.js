@@ -1,4 +1,4 @@
-import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, isValidDiaryState } from './src/diario-core.mjs';
+import { createRestoredState, escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, isValidDiaryState } from './src/diario-core.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -425,36 +425,8 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
             if (index !== null) restoreArchived(index);
         }
         function restoreArchived(index) {
-            const archive = (appState.archive || []).slice();
-            const entry = archive[index];
-            if (!entry || !entry.state) return;
-            archive.splice(index, 1);
-
-            const previous = appState;
-            if (hasPathProgress(previous)) {
-                const previousSnapshot = JSON.parse(JSON.stringify(previous));
-                delete previousSnapshot.archive;
-                archive.push({
-                    archivedAt: new Date().toISOString(),
-                    setId: previous.setId,
-                    state: previousSnapshot
-                });
-            }
-
-            const restored = JSON.parse(JSON.stringify(entry.state));
-            restored.archive = archive;
-            restored.setId = entry.setId;
-
-            // Nome e orari sono preferenze condivise tra i percorsi, non dati storici del singolo percorso.
-            for (const key of ['name', 'morningTime', 'eveningTime']) {
-                if (previous.profile && previous.profile[key] !== undefined) {
-                    restored.profile[key] = previous.profile[key];
-                }
-            }
-            // Se si torna allo stesso set, conserva la data di ricarica più recente.
-            if (previous.setId === entry.setId && previous.refill && previous.refill.last) {
-                restored.refill = JSON.parse(JSON.stringify(previous.refill));
-            }
+            const restored = createRestoredState(appState, index);
+            if (!restored) return;
 
             appState = hydrateState(restored);
             viewPause = 0;
