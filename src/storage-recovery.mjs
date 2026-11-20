@@ -8,7 +8,8 @@ export function preserveCorruptSnapshot(storage, key, raw) {
         key.length === 0 || typeof raw !== 'string') return false;
     try {
         const existing = storage.getItem(key);
-        if (existing !== null && existing !== raw) return false;
+        if (existing === raw) return true;
+        if (existing !== null) return false;
         storage.setItem(key, raw);
         return storage.getItem(key) === raw;
     } catch (error) {
