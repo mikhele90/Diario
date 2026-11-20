@@ -635,8 +635,12 @@ function applySetStatics() {
                 const pending = pendingCorruptRaw === null
                     ? []
                     : [{ key: pendingCorruptSource, raw: pendingCorruptRaw }];
+                let readableStorage = null;
+                try { readableStorage = localStorage; } catch (storageError) {
+                    console.warn('Accesso allo storage limitato durante il recupero:', storageError);
+                }
                 const collected = collectRecoverySnapshots(
-                    localStorage,
+                    readableStorage,
                     [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY],
                     pending
                 );
@@ -715,10 +719,22 @@ function applySetStatics() {
             // Legge tutte le copie conosciute senza modificarle: la chiave principale
             // non deve nascondere una copia valida presente nell'archivio di recupero
             // o nella vecchia chiave di migrazione.
-            const stored = collectRecoverySnapshots(
-                localStorage,
-                [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]
-            );
+            let stored;
+            try {
+                const readableStorage = localStorage;
+                stored = collectRecoverySnapshots(
+                    readableStorage,
+                    [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]
+                );
+            } catch (storageError) {
+                // Anche l'accesso alla proprietà localStorage può generare un'eccezione.
+                // In tal caso non creare né salvare uno stato vuoto.
+                console.error('Impossibile accedere allo storage locale:', storageError);
+                stored = {
+                    snapshots: [],
+                    unreadableKeys: [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]
+                };
+            }
             const validCandidates = [];
             const invalidCandidates = [];
 
@@ -757,8 +773,12 @@ function applySetStatics() {
             // Un archivio primario non valido, una chiave illeggibile o una copia
             // alternativa potenzialmente più ricca richiedono sempre una decisione
             // esplicita. Non si scrive mai il default per "riparare" questi casi.
+            const primaryUnreadable = stored.unreadableKeys.includes(STORAGE_KEY);
+            const alternativeUnreadableWithoutProgress = !selectedHasProgress &&
+                stored.unreadableKeys.some(key => key === CORRUPT_KEY || key === LEGACY_KEY);
             recoveryRequired =
-                stored.unreadableKeys.length > 0 ||
+                primaryUnreadable ||
+                alternativeUnreadableWithoutProgress ||
                 !!invalidPrimary ||
                 (!selected && stored.snapshots.length > 0) ||
                 (!!invalidBackup && !selectedHasProgress);
