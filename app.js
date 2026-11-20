@@ -697,11 +697,13 @@ function applySetStatics() {
             let raw = null;
             try {
                 raw = localStorage.getItem(STORAGE_KEY);
-                if (raw === null) {
+                // Mantiene il comportamento storico: una chiave principale vuota non
+                // deve impedire il recupero di dati ancora presenti nella chiave legacy.
+                if (!raw) {
                     raw = localStorage.getItem(LEGACY_KEY);
-                    fromLegacy = raw !== null;
+                    fromLegacy = !!raw;
                 }
-                if (raw !== null) {
+                if (raw) {
                     const parsed = JSON.parse(raw);
                     const candidate = isPlainObject(parsed) &&
                         Object.prototype.hasOwnProperty.call(parsed, 'state') ? parsed.state : parsed;
@@ -713,7 +715,7 @@ function applySetStatics() {
                 }
             } catch (err) {
                 console.error('Errore lettura dati locali:', err);
-                if (raw !== null) {
+                if (raw) {
                     pendingCorruptRaw = raw;
                     let preserved = false;
                     try { preserved = preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw); } catch (copyError) {
