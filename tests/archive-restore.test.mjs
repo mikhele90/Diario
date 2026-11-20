@@ -106,3 +106,15 @@ test('rifiuta indici e voci non validi e non supera il limite dell’archivio', 
     current.archive = Array.from({ length: 501 }, (_, i) => archived(i % 2 ? 'set01' : 'set02', '2026-01-01'));
     assert.equal(restoreArchivedPath(current, 0), null);
 });
+
+
+test('una ricarica registrata è un dato da conservare anche se non ci sono sessioni', () => {
+    const current = createState('set01');
+    current.refill.last = '2026-11-10';
+    assert.equal(hasPathProgress(current), true);
+    current.archive = [archived('set02', '2026-02-01')];
+    const restored = restoreArchivedPath(current, 0, '2026-11-20T10:00:00.000Z');
+    assert.ok(restored);
+    assert.equal(restored.archive.length, 1);
+    assert.equal(restored.archive[0].state.refill.last, '2026-11-10');
+});
