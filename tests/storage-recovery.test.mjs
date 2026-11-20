@@ -87,3 +87,15 @@ test('se la lettura dello storage fallisce, l’avvio non scrive sopra dati non 
     assert.match(init, /else \{\s*\/\/ Non possiamo sapere se esistano dati[\s\S]*?storageRecoveryBlocked = true;/);
     assert.ok(init.indexOf('storageRecoveryBlocked = true') < init.indexOf('saveNow()'));
 });
+
+
+test('accetta una copia precedente identica senza tentare una nuova scrittura', () => {
+    const raw = '{"state":';
+    let writes = 0;
+    const storage = {
+        getItem() { return raw; },
+        setItem() { writes += 1; throw new Error('quota esaurita'); }
+    };
+    assert.equal(preserveCorruptSnapshot(storage, 'backup', raw), true);
+    assert.equal(writes, 0);
+});
