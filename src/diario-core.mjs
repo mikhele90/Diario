@@ -204,8 +204,7 @@ export function hasPathProgress(state) {
     );
     const profile = state.profile || {};
     return weekData || hasRecords(state.baseline) || pauseData ||
-        hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep) ||
-        isValidDateOnly(state.refill?.last);
+        hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep);
 }
 
 /** Associa l'indice originale a ogni voce prima di invertirne l'ordine di visualizzazione. */
@@ -236,7 +235,10 @@ export function restoreArchivedPath(currentState, archiveIndex, archivedAt = new
     const clone = value => JSON.parse(JSON.stringify(value));
     const nextArchive = currentState.archive.slice();
     nextArchive.splice(archiveIndex, 1);
-    const currentHasProgress = hasPathProgress(currentState);
+    // Una ricarica isolata va archiviata soltanto quando si cambia set:
+    // se il set coincide, la data viene trasferita direttamente al percorso ripreso.
+    const currentHasProgress = hasPathProgress(currentState) ||
+        (currentState.setId !== entry.setId && isValidDateOnly(currentState.refill?.last));
     if (currentHasProgress) {
         if (nextArchive.length >= 500) return null;
         const previous = clone(currentState);
