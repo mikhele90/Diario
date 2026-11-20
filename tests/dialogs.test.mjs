@@ -20,15 +20,11 @@ test('la lista mostra i percorsi più recenti per primi mantenendo l’indice or
     assert.match(app, /function restoreArchived\(index\)/);
 });
 
-test('riprendere un percorso archivia l’avanzamento attuale e conserva le preferenze condivise', () => {
-    const start = app.indexOf('function restoreArchived(index)');
-    const end = app.indexOf('let pendingImport', start);
-    assert.ok(start >= 0 && end > start, 'funzione di ripristino non trovata');
-    const body = app.slice(start, end);
-    assert.match(body, /if \(hasPathProgress\(previous\)\)/);
-    assert.match(body, /archive\.push\(/);
-    assert.match(body, /for \(const key of \['name', 'morningTime', 'eveningTime'\]\)/);
-    assert.match(body, /previous\.setId === entry\.setId && previous\.refill && previous\.refill\.last/);
+test('l’interfaccia delega il ripristino alla funzione pura e mantiene il controllo dell’indice', () => {
+    assert.match(app, /import \{ createRestoredState,/);
+    assert.match(app, /function restoreArchived\(index\) \{[\\s\\S]*?createRestoredState\(appState, index\)/);
+    assert.match(app, /const index = pendingRestore/);
+    assert.match(app, /if \(index !== null\) restoreArchived\(index\)/);
 });
 
 test('il ripristino da backup esplicita la sostituzione di tutti i dati e dell’archivio', () => {
