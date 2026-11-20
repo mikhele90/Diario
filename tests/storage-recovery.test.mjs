@@ -205,7 +205,7 @@ test('esamina anche la chiave legacy invece di fermarsi alla chiave principale',
     const init = app.slice(start, end);
 
     assert.ok(start >= 0 && end > start);
-    assert.match(init, /collectRecoverySnapshots\([\s\S]*?\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY\]/);
+    assert.match(init, /collectRecoverySnapshots\([\s\S]*?\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY\]/);
     assert.match(init, /fromLegacy = selected\.key !== STORAGE_KEY/);
 });
 
