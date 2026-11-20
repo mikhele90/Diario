@@ -113,3 +113,16 @@ test('pagehide e cambio visibilità non provocano una scrittura se non c’è un
     assert.match(flush, /if \(!saveTimeout\) return/);
     assert.match(flush, /if \(!storageRecoveryBlocked\) saveNow\(\)/);
 });
+
+
+test('una chiave principale vuota continua a migrare dati validi dalla chiave legacy', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const start = app.indexOf('function initLocalSave()');
+    const end = app.indexOf('function renderActiveTab()', start);
+    const init = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.match(init, /raw = localStorage\.getItem\(STORAGE_KEY\);\s*\/\/ Mantiene il comportamento storico:[\s\S]*?if \(!raw\) \{\s*raw = localStorage\.getItem\(LEGACY_KEY\);\s*fromLegacy = !!raw;/);
+    assert.match(init, /if \(raw\) \{\s*const parsed = JSON\.parse\(raw\)/);
+    assert.match(init, /if \(raw\) \{\s*pendingCorruptRaw = raw/);
+    assert.match(init, /else \{\s*\/\/ Non possiamo sapere se esistano dati[\s\S]*?storageRecoveryBlocked = true;/);
+});
