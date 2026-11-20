@@ -111,10 +111,21 @@ test('rifiuta indici e voci non validi e non supera il limite dell’archivio', 
 test('una ricarica registrata è un dato da conservare anche se non ci sono sessioni', () => {
     const current = createState('set01');
     current.refill.last = '2026-11-10';
-    assert.equal(hasPathProgress(current), true);
+    assert.equal(hasPathProgress(current), false);
     current.archive = [archived('set02', '2026-02-01')];
     const restored = restoreArchivedPath(current, 0, '2026-11-20T10:00:00.000Z');
     assert.ok(restored);
     assert.equal(restored.archive.length, 1);
     assert.equal(restored.archive[0].state.refill.last, '2026-11-10');
+});
+
+
+test('riprendere lo stesso set conserva la ricarica senza creare un percorso archivio vuoto', () => {
+    const current = createState('set01');
+    current.refill.last = '2026-11-10';
+    current.archive = [archived('set01', '2026-02-01')];
+    const restored = restoreArchivedPath(current, 0, '2026-11-20T10:00:00.000Z');
+    assert.ok(restored);
+    assert.equal(restored.refill.last, '2026-11-10');
+    assert.equal(restored.archive.length, 0);
 });
