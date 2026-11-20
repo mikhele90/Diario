@@ -145,7 +145,7 @@ test('l’avvio non sovrascrive un archivio non valido dopo aver tentato la copi
     assert.match(init, /storageRecoveryBlocked = recoveryRequired/);
     assert.match(init, /recoveryDraftSaved = selected\.key === DRAFT_KEY/);
     assert.ok(init.includes('const selectedHasProgress = selected && hasRecoverableDiaryContent(selected.state);'));
-    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\('error'\);/);
+    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\(recoveryDraftSaved \? 'draft-saved' : 'error'\);/);
     assert.match(init, /shouldWriteInitialState\(\{ loaded, fromLegacy, recoveryRequired \}\)/);
 });
 
@@ -283,5 +283,10 @@ test('pagehide e cambio visibilità non scrivono se non c’è un salvataggio pe
     assert.ok(start >= 0 && end > start);
     assert.match(flush, /if \(!saveTimeout\) return/);
     assert.match(flush, /saveNow\(\)/);
+    const scheduleStart = app.indexOf('function scheduleAutoSave()');
+    const scheduleEnd = app.indexOf('function flushSave()', scheduleStart);
+    const schedule = app.slice(scheduleStart, scheduleEnd);
+    assert.doesNotMatch(schedule, /if \(storageRecoveryBlocked\) return/);
+    assert.match(schedule, /storageRecoveryBlocked \? 'draft-saving' : 'saving'/);
     assert.doesNotMatch(flush, /if \(!storageRecoveryBlocked\)/);
 });
