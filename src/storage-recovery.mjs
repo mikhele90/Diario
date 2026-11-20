@@ -88,9 +88,11 @@ export function selectBestRecoverySnapshot(
     const valid = Array.isArray(candidates)
         ? candidates.filter(item => item && typeof item.key === 'string' && item.state && typeof item.state === 'object')
         : [];
-    // Le modifiche più recenti fatte in modalità protetta devono prevalere
-    // sullo stato precedente, anche quando anche la copia primaria ha progressi.
-    return valid.find(item => item.key === draftKey && hasProgress(item.state)) ||
+    // Una bozza valida è una fotografia esplicita delle modifiche salvate
+    // durante il recupero. Va preferita anche quando contiene soltanto dati che
+    // hasProgress non classifica come attività (per esempio la data di inizio).
+    // Altrimenti al riavvio verrebbe scelta una copia storica e la bozza ignorata.
+    return valid.find(item => item.key === draftKey) ||
         valid.find(item => hasProgress(item.state)) ||
         valid.find(item => item.key === primaryKey) ||
         valid[0] ||
