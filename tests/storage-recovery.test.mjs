@@ -194,7 +194,7 @@ test('se una chiave locale non è leggibile, il diario resta bloccato e non salv
     assert.match(init, /primaryUnreadable/);
     assert.match(init, /alternativeUnreadableWithoutProgress/);
     assert.match(init, /storageRecoveryBlocked = recoveryRequired/);
-    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\('error'\);/);
+    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\(recoveryDraftSaved \? 'draft-saved' : 'error'\);/);
     assert.match(init, /shouldWriteInitialState\(\{ loaded, fromLegacy, recoveryRequired \}\)/);
 });
 
