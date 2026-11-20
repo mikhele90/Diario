@@ -137,7 +137,7 @@ test('l’avvio non sovrascrive un archivio non valido dopo aver tentato la copi
     const init = app.slice(start, end);
 
     assert.ok(start >= 0 && end > start);
-    assert.ok(init.indexOf('isValidDiaryState(candidate)') < init.indexOf('hydrateState(candidate)'));
+    assert.ok(init.indexOf('if (isValidDiaryState(candidate))') < init.indexOf('appState = hydrateState(selected.state)'));
     assert.match(init, /collectRecoverySnapshots\(/);
     assert.match(init, /\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY\]/);
     assert.match(init, /preserveCorruptSnapshot\(localStorage, CORRUPT_KEY, invalidPrimary\.raw\)/);
