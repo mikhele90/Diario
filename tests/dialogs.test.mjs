@@ -7,16 +7,16 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 test('importazione e ripristino usano dialog accessibili con annullamento iniziale', () => {
     for (const name of ['restore', 'import']) {
-        assert.match(html, new RegExp(`id="${name}-modal" role="dialog" aria-modal="true" aria-labelledby="${name}-dialog-title" aria-describedby="${name}-dialog-description`));
-        assert.match(html, new RegExp(`id="${name}-dialog-cancel" data-dialog-initial-focus`));
-        assert.match(app, new RegExp(`modal\\.id === '${name}-modal'`), `Escape non chiude ${name}-modal`);
+        assert.match(html, new RegExp(\`id="\${name}-modal" role="dialog" aria-modal="true" aria-labelledby="\${name}-dialog-title" aria-describedby="\${name}-dialog-description\`));
+        assert.match(html, new RegExp(\`id="\${name}-dialog-cancel" data-dialog-initial-focus\`));
+        assert.match(app, new RegExp(\`modal\\\\.id === '\${name}-modal'\`), \`Escape non chiude \${name}-modal\`);
     }
     assert.doesNotMatch(app, /\bconfirm\s*\(/, 'non devono restare popup di conferma del browser');
 });
 
 test('la lista mostra i percorsi più recenti per primi mantenendo l’indice originale', () => {
-    assert.match(app, /arch\.map\\(\\(entry, index\\) => \\(\\{ entry, index \}\)\)\.reverse\\(\\)\\.map\\(\\(\\{ entry: e, index \\}\\)/);
-    assert.match(app, /onclick="openRestoreDialog\(\$\{index\}\\)"/);
+    assert.match(app, /arch\.map\(\(entry, index\) => \(\{ entry, index \}\)\)\.reverse\(\)\.map\(\(\{ entry: e, index \}\)/);
+    assert.match(app, /onclick="openRestoreDialog\(\$\{index\}\)"/);
     assert.match(app, /function restoreArchived\(index\)/);
 });
 
@@ -25,8 +25,8 @@ test('riprendere un percorso archivia l’avanzamento attuale e conserva le pref
     const end = app.indexOf('let pendingImport', start);
     assert.ok(start >= 0 && end > start, 'funzione di ripristino non trovata');
     const body = app.slice(start, end);
-    assert.match(body, /if \(hasPathProgress\\(previous\)\)/);
-    assert.match(body, /archive\.push\\(/);
+    assert.match(body, /if \(hasPathProgress\(previous\)\)/);
+    assert.match(body, /archive\.push\(/);
     assert.match(body, /for \(const key of \['name', 'morningTime', 'eveningTime'\]\)/);
     assert.match(body, /previous\.setId === entry\.setId && previous\.refill && previous\.refill\.last/);
 });
