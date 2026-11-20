@@ -187,6 +187,74 @@ export function hasAnyDiaryData(appState, today = localDateString()) {
 }
 
 /**
+ * Indica se il percorso attivo contiene dati che meritano di essere conservati
+ * quando si riprende un percorso archiviato. Nome e orari sono preferenze globali.
+ */
+export function hasPathProgress(state) {
+    if (!state || typeof state !== 'object') return false;
+    const hasText = value => typeof value === 'string' && value.trim().length > 0;
+    const hasRecords = records => Object.values(records || {}).some(item =>
+        item && ((item.score !== null && item.score !== undefined) || hasText(item.impression))
+    );
+    const hasWeekData = Object.values(state.weeks || {}).some(week => week && (
+        (Array.isArray(week.days) && week.days.some(day => day && (day.morning || day.evening))) ||
+        hasRecords(week.scents) || hasText(week.reflection) || hasText(week.otherNotes)
+    ));
+    const hasPauseData = Object.values(state.pauses || {}).some(pause =>
+        pause && Object.values(pause).some(hasText)
+    );
+    const profile = state.profile || {};
+    return hasWeekData || hasRecords(state.baseline) || hasPauseData ||
+        hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep) ||
+        !!state.nextChoice || !!(state.refill && state.refill.last);
+}
+
+/**
+ * Crea lo stato risultante dal ripristino di un percorso archiviato.
+ * L'archivio conserva l'ordine originale: l'indice identifica l'elemento
+ * prima della visualizzazione inversa. Restituisce null se l'indice non è valido.
+ */
+export function createRestoredState(currentState, archiveIndex, archivedAt = new Date().toISOString()) {
+    if (!currentState || !Array.isArray(currentState.archive) ||
+        !Number.isInteger(archiveIndex) || archiveIndex < 0 || archiveIndex >= currentState.archive.length) {
+        return null;
+    }
+
+    const archive = currentState.archive.slice();
+    const entry = archive[archiveIndex];
+    if (!entry || !entry.state || typeof entry.state !== 'object') return null;
+    archive.splice(archiveIndex, 1);
+
+    const previousSnapshot = JSON.parse(JSON.stringify(currentState));
+    if (hasPathProgress(currentState)) {
+        delete previousSnapshot.archive;
+        archive.push({
+            archivedAt,
+            setId: currentState.setId,
+            state: previousSnapshot
+        });
+    }
+
+    const restored = JSON.parse(JSON.stringify(entry.state));
+    restored.archive = archive;
+    restored.setId = entry.setId;
+
+    // Nome e orari sono preferenze condivise tra i percorsi.
+    for (const key of ['name', 'morningTime', 'eveningTime']) {
+        if (currentState.profile && currentState.profile[key] !== undefined) {
+            restored.profile[key] = currentState.profile[key];
+        }
+    }
+
+    // La data di ricarica è condivisa tra percorsi basati sullo stesso set.
+    if (currentState.setId === entry.setId && currentState.refill && currentState.refill.last) {
+        restored.refill = JSON.parse(JSON.stringify(currentState.refill));
+    }
+
+    return restored;
+}
+
+/**
  * Restituisce la posizione del giorno corrente nel percorso:
  * { week: 1..12, dayIndex: 0..6 }, oppure null fuori dal percorso.
  * Usa giorni UTC costruiti dai componenti locali della data per evitare

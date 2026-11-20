@@ -1,4 +1,4 @@
-import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, isValidDiaryState } from './src/diario-core.mjs';
+import { createRestoredState, escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, isValidDiaryState } from './src/diario-core.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -136,6 +136,9 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
         // =========================================================================
         const STORAGE_KEY = 'diario-olfattivo-v1';
         const LEGACY_KEY = 'sos-smell-journey-set01-v1';   // versione precedente: letta una volta e copiata nella chiave nuova
+        const CORRUPT_KEY = STORAGE_KEY + '-corrotto';
+        let corruptRecoveryBlocked = false;
+        let corruptRawInMemory = null;
         let saveTimeout = null;
 
         function updateSyncBadge(status) {
@@ -177,6 +180,10 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
         }
 
         function saveNow() {
+            if (corruptRecoveryBlocked) {
+                updateSyncBadge('error');
+                return false;
+            }
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: appState }));
                 updateSyncBadge('saved');
@@ -292,12 +299,13 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             if (!card || !list) return;
             const arch = appState.archive || [];
             card.classList.toggle('hidden', arch.length === 0);
-            list.innerHTML = arch.slice().reverse().map(e => {
+            list.innerHTML = arch.map((entry, index) => ({ entry, index })).reverse().map(({ entry: e, index }) => {
                 const st = e.state, def = SET_DEFS[e.setId] || SET_DEFS.set01;
                 const sess = Object.values(st.weeks).reduce((n, w) => n + w.days.filter(d => d.morning).length + w.days.filter(d => d.evening).length, 0);
                 const val = v => escapeHtml((v === null || v === undefined) ? '–' : v);
                 const rows = def.scents.map(x => `<li>${x.name}: ${[st.baseline[x.id].score, st.weeks[4].scents[x.id].score, st.weeks[8].scents[x.id].score, st.weeks[12].scents[x.id].score].map(val).join(' → ')}</li>`).join('');
-                return `<div class="rounded-2xl border border-stone-200 p-4"><div class="font-bold text-sm text-stone-900">${def.name} · ${fmtDate(st.profile.startDate)} – ${fmtDate(st.profile.startDate, 83)}</div><div class="text-xs text-stone-500 mt-0.5">${sess}/168 sessioni · punteggi: inizio → sett. 4 → 8 → 12</div><ul class="mt-2 space-y-0.5 text-xs text-stone-600">${rows}</ul></div>`;
+                const date = st.profile && st.profile.startDate ? fmtDate(st.profile.startDate) : 'data non indicata';
+                return `<div class="rounded-2xl border border-stone-200 p-4"><div class="font-bold text-sm text-stone-900">${def.name} · ${date}${st.profile && st.profile.startDate ? ' – ' + fmtDate(st.profile.startDate, 83) : ''}</div><div class="text-xs text-stone-500 mt-0.5">${sess}/168 sessioni · punteggi: inizio → sett. 4 → 8 → 12</div><ul class="mt-2 space-y-0.5 text-xs text-stone-600">${rows}</ul><button type="button" onclick="openRestoreDialog(${index})" aria-label="Riprendi percorso ${def.name}, ${date}" class="mt-3 px-3 py-1.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-xs font-medium text-stone-700 transition">Riprendi questo percorso</button></div>`;
             }).join('');
         }
         function applySetStatics() {
@@ -360,6 +368,8 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 event.preventDefault();
                 if (modal.id === 'ritual-modal') closeRitualModal();
                 else if (modal.id === 'newpath-modal') closeNewPathDialog();
+                else if (modal.id === 'restore-modal') closeRestoreDialog();
+                else if (modal.id === 'import-modal') closeImportDialog();
                 return;
             }
             if (event.key !== 'Tab') return;
@@ -387,6 +397,82 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
 
         function closeNewPathDialog() { pendingSet = null; closeAccessibleModal(document.getElementById('newpath-modal')); }
         function confirmNewPath() { const t = pendingSet; closeNewPathDialog(); if (t) startNewPath(t); }
+
+        let pendingRestore = null;
+        function openRestoreDialog(i) {
+            if (corruptRecoveryBlocked) {
+                showToast('Prima esporta la copia dei dati precedenti dalla fascia di avviso');
+                return;
+            }
+            const entry = (appState.archive || [])[i];
+            if (!entry || !entry.state) return;
+            pendingRestore = i;
+            const def = SET_DEFS[entry.setId] || SET_DEFS.set01;
+            const start = entry.state.profile && entry.state.profile.startDate ? fmtDate(entry.state.profile.startDate) : 'data non indicata';
+            document.getElementById('restore-what').textContent = `Riprenderai il percorso con ${def.name}, iniziato il ${start}.`;
+            document.getElementById('restore-current').textContent = hasPathProgress(appState)
+                ? 'Il percorso attuale verrà archiviato prima del ripristino, così non perderai sessioni, punteggi, note o ricariche registrate.'
+                : 'Il percorso attuale non contiene ancora sessioni, punteggi o note e verrà sostituito. Il nome e gli orari personali resteranno invariati.';
+            openAccessibleModal(document.getElementById('restore-modal'), '#restore-dialog-cancel');
+        }
+        function closeRestoreDialog() {
+            pendingRestore = null;
+            closeAccessibleModal(document.getElementById('restore-modal'));
+        }
+        function confirmRestore() {
+            const index = pendingRestore;
+            closeRestoreDialog();
+            if (index !== null) restoreArchived(index);
+        }
+        function restoreArchived(index) {
+            const restored = createRestoredState(appState, index);
+            if (!restored) return;
+
+            appState = hydrateState(restored);
+            viewPause = 0;
+            lastPillsWeek = null;
+            saveNow();
+            applySetStatics();
+            switchTab('calendario');
+            showToast('Percorso ripreso');
+        }
+
+        let pendingImport = null;
+        function openImportDialog(candidate) {
+            if (corruptRecoveryBlocked) {
+                showToast('Prima esporta la copia dei dati precedenti dalla fascia di avviso');
+                return;
+            }
+            pendingImport = candidate;
+            const def = SET_DEFS[candidate.setId] || SET_DEFS.set01;
+            const sessions = Object.values(candidate.weeks).reduce((count, week) =>
+                count + week.days.filter(day => day.morning).length + week.days.filter(day => day.evening).length, 0);
+            const start = candidate.profile && candidate.profile.startDate ? fmtDate(candidate.profile.startDate) : 'data non indicata';
+            document.getElementById('import-what').textContent =
+                `Il file contiene un percorso con ${def.name}, iniziato il ${start}, con ${sessions} sessioni segnate.`;
+            openAccessibleModal(document.getElementById('import-modal'), '#import-dialog-cancel');
+        }
+        function closeImportDialog() {
+            pendingImport = null;
+            closeAccessibleModal(document.getElementById('import-modal'));
+        }
+        function confirmImport() {
+            if (corruptRecoveryBlocked) {
+                showToast('Prima esporta la copia dei dati precedenti dalla fascia di avviso');
+                return;
+            }
+            const candidate = pendingImport;
+            closeImportDialog();
+            if (!candidate) return;
+            appState = hydrateState(candidate);
+            viewPause = 0;
+            lastPillsWeek = null;
+            applySetStatics();
+            switchTab('calendario');
+            saveNow();
+            showToast('Diario importato');
+        }
+
         function startNewPath(targetSet) {
             const prev = appState;
             const old = JSON.parse(JSON.stringify(prev)); delete old.archive;
@@ -473,12 +559,130 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             }
         }
 
+        // ---------- Recupero dei dati locali non leggibili ----------
+        let corruptDismissed = false;
+        let corruptDeleteArmed = false;
+
+        function updateCorruptNotice() {
+            const banner = document.getElementById('corrupt-banner');
+            if (!banner) return;
+            let hasCopy = !!corruptRawInMemory;
+            try { hasCopy = hasCopy || !!localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            banner.classList.toggle('hidden', !hasCopy || (corruptDismissed && !corruptRecoveryBlocked));
+            const message = document.getElementById('corrupt-banner-text');
+            if (message) {
+                message.textContent = corruptRecoveryBlocked
+                    ? 'I dati salvati non erano leggibili. Non sovrascrivo la copia originale: esporta prima i dati recuperabili qui sotto. Fino ad allora i nuovi salvataggi restano sospesi.'
+                    : 'I dati salvati non erano leggibili: il diario è ripartito vuoto, ma ne ho conservato una copia. Condividila per poterla recuperare, oppure importa un backup.';
+            }
+            const dismiss = document.getElementById('corrupt-dismiss-btn');
+            if (dismiss) dismiss.classList.toggle('hidden', corruptRecoveryBlocked);
+        }
+
+        function dismissCorruptNotice() {
+            if (corruptRecoveryBlocked) return;
+            corruptDismissed = true;
+            updateCorruptNotice();
+        }
+
+        function downloadRecoveryCopy(raw, name) {
+            try {
+                const blob = new Blob([raw], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = name + '.json';
+                anchor.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showToast('Copia dei dati scaricata');
+                return true;
+            } catch (err) {
+                console.error('Errore esportazione copia recupero:', err);
+                showToast('Impossibile scaricare la copia');
+                return false;
+            }
+        }
+
+        function completeCorruptRecoveryExport(raw) {
+            if (corruptRecoveryBlocked && corruptRawInMemory === raw) {
+                corruptRawInMemory = null;
+                corruptRecoveryBlocked = false;
+                saveNow();
+            }
+            updateCorruptNotice();
+        }
+
+        function downloadCorruptCopy() {
+            let raw = corruptRawInMemory;
+            if (!raw) {
+                try { raw = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            }
+            if (!raw) { updateCorruptNotice(); return false; }
+            const exported = downloadRecoveryCopy(raw, 'Diario-Olfattivo-copia-dati-non-leggibili');
+            if (exported) completeCorruptRecoveryExport(raw);
+            return exported;
+        }
+
+        async function exportCorruptCopy() {
+            let raw = corruptRawInMemory;
+            if (!raw) {
+                try { raw = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            }
+            if (!raw) { updateCorruptNotice(); return false; }
+
+            const name = 'Diario-Olfattivo-copia-dati-non-leggibili';
+            try {
+                if (!navigator.share || !navigator.canShare || typeof File !== 'function') {
+                    return downloadCorruptCopy();
+                }
+                const file = new File([raw], name + '.json', { type: 'application/json' });
+                if (!navigator.canShare({ files: [file] })) return downloadCorruptCopy();
+                await navigator.share({ files: [file], title: 'Copia dei dati non leggibili' });
+                showToast('Copia dei dati condivisa');
+                completeCorruptRecoveryExport(raw);
+                return true;
+            } catch (err) {
+                if (err && err.name === 'AbortError') return false;
+                // Dopo un errore asincrono non avviare un download senza un nuovo gesto esplicito.
+                showToast('Condivisione non riuscita: usa "Scarica la copia"');
+                return false;
+            }
+        }
+
+        function deleteCorruptCopy() {
+            const button = document.getElementById('corrupt-delete-btn');
+            if (!corruptDeleteArmed) {
+                corruptDeleteArmed = true;
+                if (button) button.textContent = 'Tocca ancora per eliminare';
+                setTimeout(() => {
+                    corruptDeleteArmed = false;
+                    if (button) button.textContent = 'Elimina la copia';
+                }, 4000);
+                return;
+            }
+
+            corruptDeleteArmed = false;
+            try { localStorage.removeItem(CORRUPT_KEY); } catch (e) {}
+            corruptRawInMemory = null;
+            corruptRecoveryBlocked = false;
+            if (button) button.textContent = 'Elimina la copia';
+            corruptDismissed = false;
+            updateCorruptNotice();
+            // La rimozione libera spazio: riprova anche il salvataggio iniziale eventualmente fallito.
+            saveNow();
+            showToast('Copia eliminata');
+        }
+
         function initLocalSave() {
             let loaded = false;
             let fromLegacy = false;
+            let raw = null;
             try {
-                let raw = localStorage.getItem(STORAGE_KEY);
-                if (!raw) { raw = localStorage.getItem(LEGACY_KEY); fromLegacy = !!raw; }
+                raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) {
+                    raw = localStorage.getItem(LEGACY_KEY);
+                    fromLegacy = !!raw;
+                }
                 if (raw) {
                     const parsed = JSON.parse(raw);
                     appState = hydrateState(parsed.state || parsed);
@@ -486,8 +690,26 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 }
             } catch (err) {
                 console.error('Errore lettura dati locali:', err);
+                // Prima di ripartire da zero, conserva una copia. Se la quota non lo consente,
+                // resta in memoria e sospende i salvataggi per non sovrascrivere l'originale.
+                if (raw) {
+                    try {
+                        const existingCopy = localStorage.getItem(CORRUPT_KEY);
+                        if (!existingCopy) localStorage.setItem(CORRUPT_KEY, raw);
+                        else {
+                            corruptRawInMemory = raw;
+                            corruptRecoveryBlocked = true;
+                        }
+                    } catch (copyError) {
+                        corruptRawInMemory = raw;
+                        corruptRecoveryBlocked = true;
+                    }
+                }
             }
-            if (loaded && !fromLegacy) updateSyncBadge('saved'); else saveNow();
+            if (loaded && !fromLegacy) updateSyncBadge('saved');
+            else if (corruptRecoveryBlocked) updateSyncBadge('error');
+            else saveNow();
+            updateCorruptNotice();
             updateBackupInfo();
             updateRefillInfo();
             applySetStatics();
@@ -1118,12 +1340,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                         showToast('Backup non valido o danneggiato');
                         return;
                     }
-                    if (!confirm('Importando questo file sostituisci tutti i dati attuali del diario. Continuare?')) return;
-                    appState = hydrateState(candidate);
-                    applySetStatics();
-                    switchTab('calendario');
-                    saveNow();
-                    showToast('Diario importato');
+                    openImportDialog(candidate);
                 } catch (err) {
                     console.error('Errore importazione backup:', err);
                     showToast('File non valido');
@@ -1392,6 +1609,15 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             openCurrentSetNewPathDialog,
             closeNewPathDialog,
             confirmNewPath,
+            openRestoreDialog,
+            closeRestoreDialog,
+            confirmRestore,
+            closeImportDialog,
+            confirmImport,
+            exportCorruptCopy,
+            downloadCorruptCopy,
+            deleteCorruptCopy,
+            dismissCorruptNotice,
             otherSetId,
             dismissNotice,
             goToWeekPoints,
