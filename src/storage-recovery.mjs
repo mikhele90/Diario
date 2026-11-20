@@ -79,11 +79,19 @@ export function shouldWriteInitialState({ loaded = false, fromLegacy = false, re
  * Sceglie la migliore copia valida: privilegia una copia con progressi rispetto a
  * una struttura vuota e, a parità, mantiene la chiave primaria come fonte principale.
  */
-export function selectBestRecoverySnapshot(candidates, hasProgress = () => false, primaryKey = 'diario-olfattivo-v1') {
+export function selectBestRecoverySnapshot(
+    candidates,
+    hasProgress = () => false,
+    primaryKey = 'diario-olfattivo-v1',
+    draftKey = null
+) {
     const valid = Array.isArray(candidates)
         ? candidates.filter(item => item && typeof item.key === 'string' && item.state && typeof item.state === 'object')
         : [];
-    return valid.find(item => hasProgress(item.state)) ||
+    // Le modifiche più recenti fatte in modalità protetta devono prevalere
+    // sullo stato precedente, anche quando anche la copia primaria ha progressi.
+    return valid.find(item => item.key === draftKey && hasProgress(item.state)) ||
+        valid.find(item => hasProgress(item.state)) ||
         valid.find(item => item.key === primaryKey) ||
         valid[0] ||
         null;
