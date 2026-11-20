@@ -16,3 +16,61 @@ export function preserveCorruptSnapshot(storage, key, raw) {
         return false;
     }
 }
+
+/**
+ * Raccoglie in sola lettura tutte le copie note e le fotografie tenute in memoria.
+ * Valori diversi della stessa chiave restano entrambi nel pacchetto.
+ */
+export function collectRecoverySnapshots(storage, keys = [], pending = []) {
+    const snapshots = [];
+    const unreadableKeys = [];
+
+    const add = (key, raw) => {
+        if (typeof key !== 'string' || typeof raw !== 'string') return;
+        if (!snapshots.some(item => item.key === key && item.raw === raw)) {
+            snapshots.push({ key, raw });
+        }
+    };
+
+    for (const item of pending) {
+        if (item && typeof item === 'object') add(item.key, item.raw);
+    }
+
+    for (const key of keys) {
+        if (!storage || typeof storage.getItem !== 'function') {
+            unreadableKeys.push(key);
+            continue;
+        }
+        try {
+            const raw = storage.getItem(key);
+            if (raw !== null) add(key, raw);
+        } catch (error) {
+            unreadableKeys.push(key);
+        }
+    }
+
+    return { snapshots, unreadableKeys };
+}
+
+/** Produce un contenitore di recupero che conserva i valori originali senza alterarli. */
+export function createRecoveryBundle(recovery, exportedAt = new Date().toISOString()) {
+    const snapshots = Array.isArray(recovery?.snapshots) ? recovery.snapshots : [];
+    const unreadableKeys = Array.isArray(recovery?.unreadableKeys) ? recovery.unreadableKeys : [];
+    return JSON.stringify({
+        format: 'diario-olfattivo-recovery',
+        version: 1,
+        exportedAt,
+        snapshots: snapshots
+            .filter(item => item && typeof item.key === 'string' && typeof item.raw === 'string')
+            .map(item => ({ key: item.key, raw: item.raw })),
+        unreadableKeys: unreadableKeys.filter(key => typeof key === 'string')
+    }, null, 2);
+}
+
+/**
+ * Decide se l'avvio può scrivere la struttura iniziale.
+ * In presenza di un recupero necessario non deve mai essere scritto lo stato vuoto.
+ */
+export function shouldWriteInitialState({ loaded = false, fromLegacy = false, recoveryRequired = false } = {}) {
+    return !recoveryRequired && (!loaded || fromLegacy);
+}
