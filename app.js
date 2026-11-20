@@ -308,7 +308,7 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
                 const sess = Object.values(st.weeks).reduce((n, w) => n + w.days.filter(d => d.morning).length + w.days.filter(d => d.evening).length, 0);
                 const val = v => escapeHtml((v === null || v === undefined) ? '–' : v);
                 const rows = def.scents.map(x => `<li>${x.name}: ${[st.baseline[x.id].score, st.weeks[4].scents[x.id].score, st.weeks[8].scents[x.id].score, st.weeks[12].scents[x.id].score].map(val).join(' → ')}</li>`).join('');
-                return `<div class="rounded-2xl border border-stone-200 p-4"><div class="font-bold text-sm text-stone-900">${def.name} · ${fmtDate(st.profile.startDate)} – ${fmtDate(st.profile.startDate, 83)}</div><div class="text-xs text-stone-500 mt-0.5">${sess}/168 sessioni · punteggi: inizio → sett. 4 → 8 → 12</div><ul class="mt-2 space-y-0.5 text-xs text-stone-600">${rows}</ul></div>`;
+                return `<div class="rounded-2xl border border-stone-200 p-4"><div class="font-bold text-sm text-stone-900">${def.name} · ${fmtDate(st.profile.startDate)} – ${fmtDate(st.profile.startDate, 83)}</div><div class="text-xs text-stone-500 mt-0.5">${sess}/168 sessioni · punteggi: inizio → sett. 4 → 8 → 12</div><ul class="mt-2 space-y-0.5 text-xs text-stone-600">${rows}</ul><button type="button" onclick="openRestoreDialog(${i})" class="mt-3 min-h-11 px-3 py-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-xs font-medium text-stone-700 transition">Riprendi questo percorso</button></div>`;
             }).join('');
         }
 
