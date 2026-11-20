@@ -125,7 +125,7 @@ test('sceglie una copia valida con progressi quando la chiave principale è vuot
 
 test('a parità di copie con progressi mantiene la chiave principale', () => {
     const primary = { key: 'diario-olfattivo-v1', state: { marker: 'principale' } };
-    const backup = { key: 'diario-olfattico-v1-corrotto', state: { marker: 'backup' } };
+    const backup = { key: 'diario-olfattivo-v1-corrotto', state: { marker: 'backup' } };
     const selected = selectBestRecoverySnapshot([primary, backup], () => true);
     assert.equal(selected, primary);
 });
