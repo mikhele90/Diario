@@ -40,3 +40,10 @@ test('il ripristino conserva l’accesso alla chiave di migrazione precedente', 
     assert.match(app, /const LEGACY_KEY = 'sos-smell-journey-set01-v1'/);
     assert.match(app, /localStorage\.getItem\(LEGACY_KEY\)/);
 });
+
+
+test('ogni percorso archiviato mostra un’azione di ripristino accessibile al tocco', () => {
+    assert.match(app, /onclick="openRestoreDialog\(\$\{i\}\)"/);
+    assert.match(app, /function restoreArchived\(index\)/);
+    assert.match(app, /calendarNav\.focus\(\{ preventScroll: true \}\)/);
+});
