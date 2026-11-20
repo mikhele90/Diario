@@ -570,6 +570,7 @@ function applySetStatics() {
 
         let corruptDismissed = false;
         let corruptDeleteArmed = false;
+        let corruptCopyExported = false;
         function updateCorruptNotice() {
             const banner = document.getElementById('corrupt-banner');
             if (!banner) return;
@@ -577,18 +578,24 @@ function applySetStatics() {
             try { stored = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
             const hasCopy = stored !== null;
             const hasRaw = pendingCorruptRaw !== null;
-            const show = hasCopy || hasRaw;
+            const show = hasCopy || hasRaw || storageRecoveryBlocked;
             banner.classList.toggle('hidden', !show || (!storageRecoveryBlocked && corruptDismissed));
             const message = document.getElementById('corrupt-banner-text');
             if (message) {
                 message.textContent = storageRecoveryBlocked
-                    ? 'I dati originali non sono stati copiati in modo verificabile. Il salvataggio resta bloccato per non sovrascriverli: esporta questa copia prima di continuare.'
-                    : 'I dati salvati non erano leggibili. Ne è stata conservata una copia locale: esportala prima di eliminarla.';
+                    ? ((hasRaw || hasCopy)
+                        ? 'I dati originali non sono stati copiati in modo verificabile. Il salvataggio resta bloccato: esporta la copia e conferma solo dopo aver verificato che sia stata salvata fuori da Diario.'
+                        : 'Il browser non consente di leggere i dati locali. Il salvataggio resta bloccato per proteggerli: non cancellare i dati del sito; riapri l’app dopo aver ripristinato l’accesso allo spazio di archiviazione.')
+                    : 'È presente una copia locale di dati non leggibili: esportala prima di eliminarla.';
             }
             const removeButton = document.getElementById('corrupt-delete-btn');
             if (removeButton) removeButton.classList.toggle('hidden', storageRecoveryBlocked || !hasCopy);
             const laterButton = document.getElementById('corrupt-dismiss-btn');
             if (laterButton) laterButton.classList.toggle('hidden', storageRecoveryBlocked);
+            const exportButton = document.getElementById('corrupt-export-btn');
+            if (exportButton) exportButton.classList.toggle('hidden', !(hasCopy || hasRaw));
+            const continueButton = document.getElementById('corrupt-continue-btn');
+            if (continueButton) continueButton.classList.toggle('hidden', !storageRecoveryBlocked || !corruptCopyExported);
         }
         function dismissCorruptNotice() {
             if (storageRecoveryBlocked) return;
