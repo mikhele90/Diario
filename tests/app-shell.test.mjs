@@ -75,7 +75,9 @@ test('il service worker mette in cache tutti i moduli necessari offline', () => 
         'manifest.webmanifest',
         'icon-192.png',
         'icon-512.png',
-        'icon-maskable-512.png'
+        'icon-maskable-512.png',
+        'icon.svg',
+        'icon-maskable.svg'
     ]) {
         assert.ok(cachedFiles.has(file), `File non precaricato: ${file}`);
     }

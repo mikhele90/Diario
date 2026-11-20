@@ -42,7 +42,7 @@ test('i punteggi dei profumi comunicano nome, valore e selezione', () => {
 });
 
 test('la nuova interfaccia è servita anche dopo l’aggiornamento della cache PWA', () => {
-    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v14'/);
+    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v16'/);
     for (const file of ['index.html', 'styles.css', 'app.js']) {
         assert.match(serviceWorker, new RegExp(file.replace('.', '\.') ));
     }
