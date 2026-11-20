@@ -1,4 +1,5 @@
-import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, isValidDiaryState } from './src/diario-core.mjs';
+import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, getArchiveEntriesNewestFirst, restoreArchivedPath, isValidDiaryState } from './src/diario-core.mjs';
+import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -135,6 +136,9 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
         // SALVATAGGIO LOCALE (localStorage del browser, nessun dato esce dal dispositivo)
         // =========================================================================
         const STORAGE_KEY = 'diario-olfattivo-v1';
+        const CORRUPT_KEY = STORAGE_KEY + '-corrotto';
+        let pendingCorruptRaw = null;
+        let storageRecoveryBlocked = false;
         const LEGACY_KEY = 'sos-smell-journey-set01-v1';   // versione precedente: letta una volta e copiata nella chiave nuova
         let saveTimeout = null;
 
@@ -177,6 +181,11 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
         }
 
         function saveNow() {
+            if (storageRecoveryBlocked) {
+                updateSyncBadge('error');
+                updateCorruptNotice();
+                return false;
+            }
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: appState }));
                 updateSyncBadge('saved');
@@ -193,13 +202,17 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
 
         // Salvataggio automatico dopo ogni modifica (piccolo ritardo mentre scrivi)
         function scheduleAutoSave() {
+            if (storageRecoveryBlocked) { updateSyncBadge('error'); return; }
             updateSyncBadge('saving');
             if (saveTimeout) clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => { saveTimeout = null; saveNow(); }, 300);
         }
 
         function flushSave() {
-            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; saveNow(); }
+            if (!saveTimeout) return;
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+            if (!storageRecoveryBlocked) saveNow();
         }
 
         // ---------- Promemoria backup ----------
@@ -292,15 +305,96 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             if (!card || !list) return;
             const arch = appState.archive || [];
             card.classList.toggle('hidden', arch.length === 0);
-            list.innerHTML = arch.slice().reverse().map(e => {
+            list.innerHTML = getArchiveEntriesNewestFirst(arch).map(({ entry: e, index: i }) => {
                 const st = e.state, def = SET_DEFS[e.setId] || SET_DEFS.set01;
                 const sess = Object.values(st.weeks).reduce((n, w) => n + w.days.filter(d => d.morning).length + w.days.filter(d => d.evening).length, 0);
                 const val = v => escapeHtml((v === null || v === undefined) ? '–' : v);
                 const rows = def.scents.map(x => `<li>${x.name}: ${[st.baseline[x.id].score, st.weeks[4].scents[x.id].score, st.weeks[8].scents[x.id].score, st.weeks[12].scents[x.id].score].map(val).join(' → ')}</li>`).join('');
-                return `<div class="rounded-2xl border border-stone-200 p-4"><div class="font-bold text-sm text-stone-900">${def.name} · ${fmtDate(st.profile.startDate)} – ${fmtDate(st.profile.startDate, 83)}</div><div class="text-xs text-stone-500 mt-0.5">${sess}/168 sessioni · punteggi: inizio → sett. 4 → 8 → 12</div><ul class="mt-2 space-y-0.5 text-xs text-stone-600">${rows}</ul></div>`;
+                return `<div class="rounded-2xl border border-stone-200 p-4"><div class="font-bold text-sm text-stone-900">${def.name} · ${fmtDate(st.profile.startDate)} – ${fmtDate(st.profile.startDate, 83)}</div><div class="text-xs text-stone-500 mt-0.5">${sess}/168 sessioni · punteggi: inizio → sett. 4 → 8 → 12</div><ul class="mt-2 space-y-0.5 text-xs text-stone-600">${rows}</ul><button type="button" onclick="openRestoreDialog(${i})" class="mt-3 min-h-11 px-3 py-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-xs font-medium text-stone-700 transition">Riprendi questo percorso</button></div>`;
             }).join('');
         }
-        function applySetStatics() {
+
+        let pendingRestore = null;
+        function openRestoreDialog(index) {
+            const entry = (appState.archive || [])[index];
+            if (!entry) return;
+            pendingRestore = index;
+            const set = SET_DEFS[entry.setId] || SET_DEFS.set01;
+            const date = entry.state?.profile?.startDate;
+            document.getElementById('restore-what').textContent =
+                'Torni al percorso con il ' + set.name + ' iniziato il ' + (date ? fmtDate(date) : 'data non indicata') + '.';
+            document.getElementById('restore-current').textContent = hasPathProgress(appState)
+                ? 'Il percorso attuale viene archiviato prima del ripristino: non perdi i progressi.'
+                : 'Il percorso attuale non contiene progressi e verrà sostituito.';
+            openAccessibleModal(document.getElementById('restore-modal'), '#restore-dialog-cancel');
+        }
+        function closeRestoreDialog() {
+            pendingRestore = null;
+            closeAccessibleModal(document.getElementById('restore-modal'));
+        }
+        function confirmRestore() {
+            const index = pendingRestore;
+            closeRestoreDialog();
+            if (index !== null) restoreArchived(index);
+        }
+        function restoreArchived(index) {
+            const restored = restoreArchivedPath(appState, index);
+            if (!restored) {
+                showToast('Impossibile riprendere il percorso: controlla l’archivio e lo spazio disponibile.');
+                return;
+            }
+            appState = hydrateState(restored);
+            viewPause = 0;
+            lastPillsWeek = null;
+            saveNow();
+            applySetStatics();
+            switchTab('calendario');
+            const calendarNav = document.getElementById('nav-calendario');
+            if (calendarNav) calendarNav.focus({ preventScroll: true });
+            showToast('Percorso ripreso');
+        }
+
+        let pendingImport = null;
+        function openImportDialog(candidate) {
+            // Completa i campi mancanti dei backup legacy prima di calcolare le sessioni.
+            const normalized = deepMerge(createDefaultState(), candidate);
+            pendingImport = candidate;
+            const set = SET_DEFS[candidate.setId] || SET_DEFS.set01;
+            const sessions = Object.values(normalized.weeks || {}).reduce((count, week) => {
+                const days = Array.isArray(week?.days) ? week.days : [];
+                return count + days.filter(day => day?.morning).length + days.filter(day => day?.evening).length;
+            }, 0);
+            const date = normalized.profile?.startDate;
+            document.getElementById('import-what').textContent =
+                'Il file contiene un percorso con il ' + set.name + ' iniziato il ' +
+                (date ? fmtDate(date) : 'data non indicata') + ', con ' + sessions + ' sessioni segnate.';
+            openAccessibleModal(document.getElementById('import-modal'), '#import-dialog-cancel');
+        }
+        function closeImportDialog() {
+            pendingImport = null;
+            closeAccessibleModal(document.getElementById('import-modal'));
+        }
+        function confirmImport() {
+            if (storageRecoveryBlocked) {
+                showToast('Prima esporta la copia dei dati originali: il salvataggio è bloccato per proteggerli.');
+                return;
+            }
+            const candidate = pendingImport;
+            if (!candidate) return;
+            closeImportDialog();
+            appState = hydrateState(candidate);
+            viewPause = 0;
+            lastPillsWeek = null;
+            saveNow();
+            applySetStatics();
+            switchTab('calendario');
+            const calendarNav = document.getElementById('nav-calendario');
+            if (calendarNav) calendarNav.focus({ preventScroll: true });
+            showToast('Diario importato');
+        }
+
+        
+function applySetStatics() {
             const set = SET_DEFS[appState.setId] || SET_DEFS.set01;
             ['set-badge', 'guide-set-badge'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = set.name; });
             document.querySelectorAll('[data-scent-th]').forEach(th => { th.textContent = SCENTS[+th.dataset.scentTh].name.split(' ')[0]; });
@@ -312,6 +406,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             renderArchive();
             lucide.createIcons();
         }
+
         // =========================================================================
         // ACCESSIBILITÀ MODALI: focus iniziale, contenimento, Esc e ripristino
         // =========================================================================
@@ -360,6 +455,8 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 event.preventDefault();
                 if (modal.id === 'ritual-modal') closeRitualModal();
                 else if (modal.id === 'newpath-modal') closeNewPathDialog();
+                else if (modal.id === 'restore-modal') closeRestoreDialog();
+                else if (modal.id === 'import-modal') closeImportDialog();
                 return;
             }
             if (event.key !== 'Tab') return;
@@ -473,21 +570,167 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             }
         }
 
+        let corruptDismissed = false;
+        let corruptDeleteArmed = false;
+        let corruptCopyExported = false;
+        function updateCorruptNotice() {
+            const banner = document.getElementById('corrupt-banner');
+            if (!banner) return;
+            let stored = null;
+            try { stored = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            const hasCopy = stored !== null;
+            const hasRaw = pendingCorruptRaw !== null;
+            const show = hasCopy || hasRaw || storageRecoveryBlocked;
+            banner.classList.toggle('hidden', !show || (!storageRecoveryBlocked && corruptDismissed));
+            const message = document.getElementById('corrupt-banner-text');
+            if (message) {
+                message.textContent = storageRecoveryBlocked
+                    ? ((hasRaw || hasCopy)
+                        ? 'I dati originali non sono stati copiati in modo verificabile. Il salvataggio resta bloccato: esporta la copia e conferma solo dopo aver verificato che sia stata salvata fuori da Diario.'
+                        : 'Il browser non consente di leggere i dati locali. Il salvataggio resta bloccato per proteggerli: non cancellare i dati del sito; riapri l’app dopo aver ripristinato l’accesso allo spazio di archiviazione.')
+                    : 'È presente una copia locale di dati non leggibili: esportala prima di eliminarla.';
+            }
+            const removeButton = document.getElementById('corrupt-delete-btn');
+            if (removeButton) removeButton.classList.toggle('hidden', storageRecoveryBlocked || !hasCopy);
+            const laterButton = document.getElementById('corrupt-dismiss-btn');
+            if (laterButton) laterButton.classList.toggle('hidden', storageRecoveryBlocked);
+            const exportButton = document.getElementById('corrupt-export-btn');
+            if (exportButton) exportButton.classList.toggle('hidden', !(hasCopy || hasRaw));
+            const continueButton = document.getElementById('corrupt-continue-btn');
+            if (continueButton) continueButton.classList.toggle('hidden', !storageRecoveryBlocked || !corruptCopyExported);
+        }
+        function dismissCorruptNotice() {
+            if (storageRecoveryBlocked) return;
+            corruptDismissed = true;
+            updateCorruptNotice();
+        }
+        function deleteCorruptCopy() {
+            const btn = document.getElementById('corrupt-delete-btn');
+            if (storageRecoveryBlocked) return;
+            if (!corruptDeleteArmed) {
+                corruptDeleteArmed = true;
+                if (btn) btn.textContent = 'Tocca ancora per eliminare';
+                setTimeout(() => {
+                    corruptDeleteArmed = false;
+                    if (btn) btn.textContent = 'Elimina la copia';
+                }, 4000);
+                return;
+            }
+            corruptDeleteArmed = false;
+            try {
+                localStorage.removeItem(CORRUPT_KEY);
+                if (localStorage.getItem(CORRUPT_KEY) !== null) throw new Error('La copia non è stata eliminata');
+            } catch (err) {
+                showToast('Non è stato possibile eliminare la copia');
+                return;
+            }
+            if (btn) btn.textContent = 'Elimina la copia';
+            updateCorruptNotice();
+            showToast('Copia eliminata');
+        }
+        async function exportCorruptCopy() {
+            let raw = pendingCorruptRaw;
+            if (raw === null) {
+                try { raw = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            }
+            if (raw === null) {
+                updateCorruptNotice();
+                showToast('Copia non disponibile: il browser non consente di leggere i dati locali.');
+                return false;
+            }
+            try {
+                if (navigator.share && navigator.canShare) {
+                    const file = new File([raw], 'Diario-Olfattivo-copia-dati-non-leggibili.json', { type: 'application/json' });
+                    if (navigator.canShare({ files: [file] })) {
+                        await navigator.share({ files: [file], title: 'Copia dei dati non leggibili' });
+                        if (storageRecoveryBlocked) corruptCopyExported = true;
+                        updateCorruptNotice();
+                        showToast(storageRecoveryBlocked
+                            ? 'Condivisione completata: verifica di aver salvato il file fuori da Diario'
+                            : 'Copia condivisa');
+                        return true;
+                    }
+                }
+            } catch (err) {
+                if (err && err.name === 'AbortError') return false;
+            }
+            try {
+                const blob = new Blob([raw], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'Diario-Olfattivo-copia-dati-non-leggibili.json';
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (err) {
+                showToast('Impossibile esportare la copia');
+                return false;
+            }
+            if (storageRecoveryBlocked) {
+                corruptCopyExported = true;
+                updateCorruptNotice();
+                showToast('Download avviato: verifica di aver salvato il file prima di sbloccare il diario');
+            } else {
+                updateCorruptNotice();
+                showToast('Copia esportata');
+            }
+            return true;
+        }
+
+        function confirmCorruptRecovery() {
+            if (!storageRecoveryBlocked || !corruptCopyExported) return;
+            const confirmed = confirm(
+                'Hai verificato che il file con i dati originali è stato salvato in una posizione esterna e che puoi ritrovarlo? Solo allora il diario potrà sovrascrivere i dati locali non leggibili.'
+            );
+            if (!confirmed) return;
+            storageRecoveryBlocked = false;
+            pendingCorruptRaw = null;
+            corruptCopyExported = false;
+            corruptDismissed = false;
+            saveNow();
+            updateCorruptNotice();
+        }
+
         function initLocalSave() {
             let loaded = false;
             let fromLegacy = false;
+            let raw = null;
             try {
-                let raw = localStorage.getItem(STORAGE_KEY);
-                if (!raw) { raw = localStorage.getItem(LEGACY_KEY); fromLegacy = !!raw; }
+                raw = localStorage.getItem(STORAGE_KEY);
+                // Mantiene il comportamento storico: una chiave principale vuota non
+                // deve impedire il recupero di dati ancora presenti nella chiave legacy.
+                if (!raw) {
+                    raw = localStorage.getItem(LEGACY_KEY);
+                    fromLegacy = !!raw;
+                }
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    appState = hydrateState(parsed.state || parsed);
+                    const candidate = isPlainObject(parsed) &&
+                        Object.prototype.hasOwnProperty.call(parsed, 'state') ? parsed.state : parsed;
+                    if (!isValidDiaryState(candidate)) {
+                        throw new Error('I dati locali non rispettano il formato previsto');
+                    }
+                    appState = hydrateState(candidate);
                     loaded = true;
                 }
             } catch (err) {
                 console.error('Errore lettura dati locali:', err);
+                if (raw) {
+                    pendingCorruptRaw = raw;
+                    let preserved = false;
+                    try { preserved = preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw); } catch (copyError) {
+                        console.error('Impossibile conservare la copia di sicurezza:', copyError);
+                    }
+                    storageRecoveryBlocked = !preserved;
+                    if (!storageRecoveryBlocked) pendingCorruptRaw = null;
+                } else {
+                    // Non possiamo sapere se esistano dati se il browser nega la lettura:
+                    // non scrivere mai lo stato vuoto in questa condizione.
+                    storageRecoveryBlocked = true;
+                }
             }
             if (loaded && !fromLegacy) updateSyncBadge('saved'); else saveNow();
+            updateCorruptNotice();
             updateBackupInfo();
             updateRefillInfo();
             applySetStatics();
@@ -1107,7 +1350,6 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 input.value = '';
                 return;
             }
-
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -1118,12 +1360,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                         showToast('Backup non valido o danneggiato');
                         return;
                     }
-                    if (!confirm('Importando questo file sostituisci tutti i dati attuali del diario. Continuare?')) return;
-                    appState = hydrateState(candidate);
-                    applySetStatics();
-                    switchTab('calendario');
-                    saveNow();
-                    showToast('Diario importato');
+                    openImportDialog(candidate);
                 } catch (err) {
                     console.error('Errore importazione backup:', err);
                     showToast('File non valido');
@@ -1398,6 +1635,16 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             markRefilled,
             dismissRefillBanner,
             importData,
+            openRestoreDialog,
+            closeRestoreDialog,
+            confirmRestore,
+            openImportDialog,
+            closeImportDialog,
+            confirmImport,
+            exportCorruptCopy,
+            confirmCorruptRecovery,
+            deleteCorruptCopy,
+            dismissCorruptNotice,
             openRitualModal,
             closeRitualModal,
             toggleTimer,

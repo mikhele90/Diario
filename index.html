@@ -145,6 +145,16 @@
                 </div>
             </div>
 
+            <div id="corrupt-banner" role="alert" class="hidden mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                <p id="corrupt-banner-text" class="text-xs sm:text-sm text-amber-900"></p>
+                <div class="flex flex-wrap gap-2">
+                    <button id="corrupt-export-btn" type="button" onclick="exportCorruptCopy()" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition">Esporta la copia</button>
+                    <button id="corrupt-continue-btn" type="button" onclick="confirmCorruptRecovery()" class="hidden px-3 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-medium transition">Ho salvato la copia fuori da Diario</button>
+                    <button id="corrupt-delete-btn" type="button" onclick="deleteCorruptCopy()" class="hidden px-3 py-1.5 rounded-xl text-xs font-medium text-amber-800 hover:bg-amber-100 transition">Elimina la copia</button>
+                    <button id="corrupt-dismiss-btn" type="button" onclick="dismissCorruptNotice()" class="px-3 py-1.5 rounded-xl text-xs font-medium text-amber-800 hover:bg-amber-100 transition">Più tardi</button>
+                </div>
+            </div>
+
             <div id="backup-banner" class="hidden mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
                 <p id="backup-banner-text" class="text-xs sm:text-sm text-amber-900"></p>
                 <div class="flex gap-2">
@@ -667,6 +677,34 @@
                 <button onclick="exportData()" class="px-4 py-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-sm font-medium text-stone-700 transition">Condividi backup</button>
                 <button onclick="confirmNewPath()" class="px-4 py-2.5 rounded-xl bg-botanical-800 hover:bg-botanical-900 text-white text-sm font-medium transition">Archivia e riparti</button>
                 <button id="newpath-dialog-cancel" data-dialog-initial-focus type="button" onclick="closeNewPathDialog()" class="px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100 transition">Annulla</button>
+            </div>
+        </div>
+    </div>
+        <div id="restore-modal" role="dialog" aria-modal="true" aria-labelledby="restore-dialog-title" aria-describedby="restore-dialog-description" tabindex="-1" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+        <div class="diary-dialog-panel w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 id="restore-dialog-title" class="font-serif-title text-xl text-botanical-950">Riprendere questo percorso?</h2>
+            <div id="restore-dialog-description" class="text-sm text-stone-600 space-y-2">
+                <p id="restore-what"></p>
+                <p id="restore-current"></p>
+            </div>
+            <div class="flex flex-col gap-2">
+                <button type="button" onclick="confirmRestore()" class="px-4 py-2.5 rounded-xl bg-botanical-800 hover:bg-botanical-900 text-white text-sm font-medium transition">Riprendi percorso</button>
+                <button id="restore-dialog-cancel" data-dialog-initial-focus type="button" onclick="closeRestoreDialog()" class="px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100 transition">Annulla</button>
+            </div>
+        </div>
+    </div>
+        <div id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-dialog-title" aria-describedby="import-dialog-description" tabindex="-1" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+        <div class="diary-dialog-panel w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 id="import-dialog-title" class="font-serif-title text-xl text-botanical-950">Importare questo backup?</h2>
+            <div id="import-dialog-description" class="text-sm text-stone-600 space-y-2">
+                <p id="import-what"></p>
+                <p><strong class="text-stone-900">Si sostituisce:</strong> tutti i dati attuali del diario, archivio compreso, con quelli del file.</p>
+                <p>Prima di procedere, puoi condividere un backup dei dati attuali.</p>
+            </div>
+            <div class="flex flex-col gap-2">
+                <button type="button" onclick="exportData()" class="px-4 py-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-sm font-medium text-stone-700 transition">Condividi backup attuale</button>
+                <button type="button" onclick="confirmImport()" class="px-4 py-2.5 rounded-xl bg-botanical-800 hover:bg-botanical-900 text-white text-sm font-medium transition">Importa e sostituisci</button>
+                <button id="import-dialog-cancel" data-dialog-initial-focus type="button" onclick="closeImportDialog()" class="px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-100 transition">Annulla</button>
             </div>
         </div>
     </div>

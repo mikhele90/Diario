@@ -72,6 +72,7 @@ test('il service worker mette in cache tutti i moduli necessari offline', () => 
         'styles.css',
         'app.js',
         'src/diario-core.mjs',
+        'src/storage-recovery.mjs',
         'manifest.webmanifest',
         'icon-192.png',
         'icon-512.png',

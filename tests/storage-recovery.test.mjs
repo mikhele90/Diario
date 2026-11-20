@@ -1,0 +1,128 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { preserveCorruptSnapshot } from '../src/storage-recovery.mjs';
+import { readFile } from 'node:fs/promises';
+
+function createStorage(initial = {}) {
+    const values = new Map(Object.entries(initial));
+    return {
+        getItem(key) { return values.has(key) ? values.get(key) : null; },
+        setItem(key, value) { values.set(key, String(value)); },
+        removeItem(key) { values.delete(key); },
+        values
+    };
+}
+
+test('conserva e verifica la copia grezza dei dati non leggibili', () => {
+    const storage = createStorage();
+    const raw = '{"state":';
+    assert.equal(preserveCorruptSnapshot(storage, 'diario-corrotto', raw), true);
+    assert.equal(storage.getItem('diario-corrotto'), raw);
+});
+
+test('non sovrascrive una copia precedente diversa', () => {
+    const previous = '{"dati":"precedenti"}';
+    const storage = createStorage({ backup: previous });
+    assert.equal(preserveCorruptSnapshot(storage, 'backup', '{"dati":"nuovi"}'), false);
+    assert.equal(storage.getItem('backup'), previous);
+});
+
+test('se la scrittura o la rilettura falliscono, dichiara la copia non verificata', () => {
+    const storage = {
+        getItem() { return null; },
+        setItem() { throw new Error('quota esaurita'); }
+    };
+    assert.equal(preserveCorruptSnapshot(storage, 'backup', 'raw'), false);
+});
+
+test('rifiuta argomenti non validi senza tentare scritture', () => {
+    assert.equal(preserveCorruptSnapshot(null, 'backup', 'raw'), false);
+    assert.equal(preserveCorruptSnapshot({}, 'backup', 'raw'), false);
+    assert.equal(preserveCorruptSnapshot({ getItem() {}, setItem() {} }, '', 'raw'), false);
+});
+
+
+test('l’avvio valida il formato locale prima di idratare e blocca i salvataggi se la copia fallisce', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const saveStart = app.indexOf('function saveNow()');
+    const saveEnd = app.indexOf('function scheduleAutoSave()', saveStart);
+    const initStart = app.indexOf('function initLocalSave()');
+    const initEnd = app.indexOf('function renderActiveTab()', initStart);
+    const saveBody = app.slice(saveStart, saveEnd);
+    const initBody = app.slice(initStart, initEnd);
+    assert.ok(saveStart >= 0 && saveEnd > saveStart);
+    assert.ok(initStart >= 0 && initEnd > initStart);
+    assert.ok(saveBody.indexOf('if (storageRecoveryBlocked)') < saveBody.indexOf('localStorage.setItem(STORAGE_KEY'));
+    assert.ok(initBody.indexOf('isValidDiaryState(candidate)') < initBody.indexOf('hydrateState(candidate)'));
+    assert.match(initBody, /preserveCorruptSnapshot\(localStorage, CORRUPT_KEY, raw\)/);
+    assert.match(initBody, /storageRecoveryBlocked = !preserved/);
+    assert.match(app, /if \(storageRecoveryBlocked\) \{\s*showToast\('Prima esporta la copia dei dati originali/);
+    assert.match(app, /const LEGACY_KEY = 'sos-smell-journey-set01-v1'/);
+});
+
+
+test('l’esportazione non sblocca da sola la sovrascrittura: serve una conferma esplicita', async () => {
+    const [app, html] = await Promise.all([
+        readFile(new URL('../app.js', import.meta.url), 'utf8'),
+        readFile(new URL('../index.html', import.meta.url), 'utf8')
+    ]);
+    const start = app.indexOf('async function exportCorruptCopy()');
+    const confirmStart = app.indexOf('function confirmCorruptRecovery()', start);
+    const end = app.indexOf('function initLocalSave()', confirmStart);
+    const exportFlow = app.slice(start, confirmStart);
+    const confirmFlow = app.slice(confirmStart, end);
+    assert.ok(start >= 0 && confirmStart > start && end > confirmStart);
+    assert.match(exportFlow, /corruptCopyExported = true/);
+    assert.doesNotMatch(exportFlow, /storageRecoveryBlocked = false/);
+    assert.match(confirmFlow, /if \(!storageRecoveryBlocked \|\| !corruptCopyExported\) return/);
+    assert.match(confirmFlow, /confirm\(/);
+    assert.match(confirmFlow, /storageRecoveryBlocked = false/);
+    assert.match(html, /onclick="confirmCorruptRecovery\(\)"/);
+});
+
+
+test('se la lettura dello storage fallisce, l’avvio non scrive sopra dati non verificabili', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const start = app.indexOf('function initLocalSave()');
+    const end = app.indexOf('function renderActiveTab()', start);
+    const init = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.match(init, /else \{\s*\/\/ Non possiamo sapere se esistano dati[\s\S]*?storageRecoveryBlocked = true;/);
+    assert.ok(init.indexOf('storageRecoveryBlocked = true') < init.indexOf('saveNow()'));
+});
+
+
+test('accetta una copia precedente identica senza tentare una nuova scrittura', () => {
+    const raw = '{"state":';
+    let writes = 0;
+    const storage = {
+        getItem() { return raw; },
+        setItem() { writes += 1; throw new Error('quota esaurita'); }
+    };
+    assert.equal(preserveCorruptSnapshot(storage, 'backup', raw), true);
+    assert.equal(writes, 0);
+});
+
+
+test('pagehide e cambio visibilità non provocano una scrittura se non c’è un salvataggio pendente', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const start = app.indexOf('function flushSave()');
+    const end = app.indexOf('const BACKUP_KEY', start);
+    const flush = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.match(flush, /if \(!saveTimeout\) return/);
+    assert.match(flush, /if \(!storageRecoveryBlocked\) saveNow\(\)/);
+});
+
+
+test('una chiave principale vuota continua a migrare dati validi dalla chiave legacy', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const start = app.indexOf('function initLocalSave()');
+    const end = app.indexOf('function renderActiveTab()', start);
+    const init = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.match(init, /raw = localStorage\.getItem\(STORAGE_KEY\);\s*\/\/ Mantiene il comportamento storico:[\s\S]*?if \(!raw\) \{\s*raw = localStorage\.getItem\(LEGACY_KEY\);\s*fromLegacy = !!raw;/);
+    assert.match(init, /if \(raw\) \{\s*const parsed = JSON\.parse\(raw\)/);
+    assert.match(init, /if \(raw\) \{\s*pendingCorruptRaw = raw/);
+    assert.match(init, /else \{\s*\/\/ Non possiamo sapere se esistano dati[\s\S]*?storageRecoveryBlocked = true;/);
+});
