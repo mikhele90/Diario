@@ -1,14 +1,14 @@
 // Le pagine, gli script, i moduli e gli stili provano prima la rete; offline usano la cache.
 // Gli asset grafici restano cache-first per evitare richieste inutili.
 const CACHE_PREFIX = 'diario-olfattivo-';
-const CACHE = 'diario-olfattivo-v18';
+const CACHE = 'diario-olfattivo-v19';
 const FILES = [
   './',
   'index.html',
   'styles.css',
   'app.js',
   'src/diario-core.mjs',
-  'src/storage-recovery.mjs',
+  'src/diario-storage.mjs',
   'manifest.webmanifest',
   'icon-192.png',
   'icon-512.png',
