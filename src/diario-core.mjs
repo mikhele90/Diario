@@ -208,24 +208,6 @@ export function hasPathProgress(state) {
 }
 
 
-/**
- * Indica se una copia contiene contenuti inseriti dall'utente, ignorando la data
- * di inizio automatica: da sola non distingue un diario vuoto da uno compilato.
- */
-export function hasRecoverableDiaryContent(state) {
-    if (!state || typeof state !== 'object') return false;
-    const hasText = value => typeof value === 'string' && value.trim().length > 0;
-    const profile = state.profile || {};
-    return hasPathProgress(state) ||
-        hasText(profile.name) ||
-        (profile.morningTime && profile.morningTime !== '08:00') ||
-        (profile.eveningTime && profile.eveningTime !== '19:00') ||
-        !!(state.refill && state.refill.last) ||
-        !!state.nextChoice ||
-        (!!state.setId && state.setId !== 'set01') ||
-        (Array.isArray(state.archive) && state.archive.length > 0);
-}
-
 /** Associa l'indice originale a ogni voce prima di invertirne l'ordine di visualizzazione. */
 export function getArchiveEntriesNewestFirst(archive) {
     return (Array.isArray(archive) ? archive : [])

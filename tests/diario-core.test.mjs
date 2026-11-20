@@ -6,7 +6,6 @@ import {
     getRitualPosition,
     getScentTrendPoints,
     hasAnyDiaryData,
-    hasRecoverableDiaryContent,
     isValidDiaryState
 } from '../src/diario-core.mjs';
 
@@ -138,19 +137,6 @@ test('rifiuta un archivio incompleto ma accetta una fotografia completa', () => 
     assert.equal(isValidDiaryState(complete), true);
 });
 
-
-test('una data di inizio vecchia da sola non fa sembrare compilato un diario vuoto', () => {
-    const state = createDiaryState();
-    state.profile.startDate = '2026-01-01';
-    assert.equal(hasRecoverableDiaryContent(state), false);
-});
-
-test('una sessione o un contenuto del profilo sono progressi da recuperare', () => {
-    const state = createDiaryState();
-    state.profile.startDate = '2026-01-01';
-    state.weeks[1].days[0].morning = true;
-    assert.equal(hasRecoverableDiaryContent(state), true);
-});
 
 test('un diario vuoto non richiede ancora un backup', () => {
     assert.equal(hasAnyDiaryData(createDiaryState(), '2026-11-18'), false);

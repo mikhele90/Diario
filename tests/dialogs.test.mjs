@@ -36,11 +36,12 @@ test('l’importazione non usa più la conferma nativa del browser', () => {
     assert.doesNotMatch(handler, /confirm\(/);
 });
 
-test('il ripristino continua a includere la chiave di migrazione precedente tra le fonti', () => {
+test('il diario usa una sola chiave principale e mantiene soltanto la migrazione legacy', () => {
+    assert.match(app, /const STORAGE_KEY = 'diario-olfattivo-v1'/);
     assert.match(app, /const LEGACY_KEY = 'sos-smell-journey-set01-v1'/);
-    assert.ok(app.includes('collectRecoverySnapshots('));
-    assert.ok(app.includes('[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY]'));
-    assert.ok(app.includes('fromLegacy = selected.key !== STORAGE_KEY'));
+    assert.match(app, /loadDiarySnapshot\(localStorage/);
+    assert.match(app, /saveDiarySnapshot\(localStorage/);
+    assert.doesNotMatch(app, /CORRUPT_KEY|DRAFT_KEY|storageRecoveryBlocked|storage-recovery/);
 });
 
 
