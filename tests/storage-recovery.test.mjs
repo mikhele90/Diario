@@ -6,7 +6,8 @@ import {
     collectRecoverySnapshots,
     createRecoveryBundle,
     shouldWriteInitialState,
-    selectBestRecoverySnapshot
+    selectBestRecoverySnapshot,
+    persistDiarySnapshot
 } from '../src/storage-recovery.mjs';
 
 function createStorage(initial = {}) {
@@ -139,11 +140,12 @@ test('l’avvio non sovrascrive un archivio non valido dopo aver tentato la copi
     assert.ok(start >= 0 && end > start);
     assert.ok(init.indexOf('if (isValidDiaryState(candidate))') < init.indexOf('appState = hydrateState(selected.state)'));
     assert.match(init, /collectRecoverySnapshots\(/);
-    assert.match(init, /\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY\]/);
+    assert.match(init, /\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY\]/);
     assert.match(init, /preserveCorruptSnapshot\(localStorage, CORRUPT_KEY, invalidPrimary\.raw\)/);
     assert.match(init, /storageRecoveryBlocked = recoveryRequired/);
+    assert.match(init, /recoveryDraftSaved = selected\.key === DRAFT_KEY/);
     assert.ok(init.includes('const selectedHasProgress = selected && hasRecoverableDiaryContent(selected.state);'));
-    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\('error'\);/);
+    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\(recoveryDraftSaved \? 'draft-saved' : 'error'\);/);
     assert.match(init, /shouldWriteInitialState\(\{ loaded, fromLegacy, recoveryRequired \}\)/);
 });
 
@@ -155,7 +157,7 @@ test('l’esportazione raccoglie tutte le chiavi locali e la fotografia tenuta i
 
     assert.ok(start >= 0 && end > start);
     assert.match(flow, /collectRecoverySnapshots\(/);
-    assert.match(flow, /\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY\]/);
+    assert.match(flow, /\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY\]/);
     assert.match(flow, /createRecoveryBundle\(collected\)/);
     assert.match(flow, /Diario-recupero-completo\.json/);
     assert.match(flow, /corruptCopyExported = true/);
@@ -192,7 +194,7 @@ test('se una chiave locale non è leggibile, il diario resta bloccato e non salv
     assert.match(init, /primaryUnreadable/);
     assert.match(init, /alternativeUnreadableWithoutProgress/);
     assert.match(init, /storageRecoveryBlocked = recoveryRequired/);
-    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\('error'\);/);
+    assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\(recoveryDraftSaved \? 'draft-saved' : 'error'\);/);
     assert.match(init, /shouldWriteInitialState\(\{ loaded, fromLegacy, recoveryRequired \}\)/);
 });
 
@@ -203,8 +205,73 @@ test('esamina anche la chiave legacy invece di fermarsi alla chiave principale',
     const init = app.slice(start, end);
 
     assert.ok(start >= 0 && end > start);
-    assert.match(init, /collectRecoverySnapshots\([\s\S]*?\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY\]/);
+    assert.match(init, /collectRecoverySnapshots\([\s\S]*?\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY\]/);
     assert.match(init, /fromLegacy = selected\.key !== STORAGE_KEY/);
+});
+
+
+test('in modalità recupero salva le modifiche in una bozza senza toccare i dati originali', () => {
+    const original = JSON.stringify({ savedAt: '2026-11-19T10:00:00.000Z', state: { note: 'originale' } });
+    const storage = createStorage({ primary: original });
+    const result = persistDiarySnapshot(storage, {
+        primaryKey: 'primary',
+        draftKey: 'draft',
+        state: { note: 'nuova modifica' },
+        savedAt: '2026-11-20T10:00:00.000Z',
+        recoveryMode: true
+    });
+
+    assert.equal(result.saved, true);
+    assert.equal(result.key, 'draft');
+    assert.equal(storage.getItem('primary'), original);
+    assert.equal(JSON.parse(storage.getItem('draft')).state.note, 'nuova modifica');
+});
+
+test('la bozza protetta viene preferita alla copia primaria più vecchia al riavvio', () => {
+    const primary = { key: 'primary', state: { note: 'vecchio' } };
+    const draft = { key: 'draft', state: { note: 'nuovo' } };
+    const selected = selectBestRecoverySnapshot(
+        [primary, draft],
+        () => true,
+        'primary',
+        'draft'
+    );
+    assert.equal(selected, draft);
+});
+
+test('fuori dalla modalità recupero salva la chiave principale e rimuove la bozza', () => {
+    const storage = createStorage({
+        primary: 'old',
+        draft: 'stale-draft'
+    });
+    const result = persistDiarySnapshot(storage, {
+        primaryKey: 'primary',
+        draftKey: 'draft',
+        state: { note: 'consolidato' },
+        savedAt: '2026-11-20T11:00:00.000Z',
+        recoveryMode: false
+    });
+
+    assert.equal(result.saved, true);
+    assert.equal(result.key, 'primary');
+    assert.equal(JSON.parse(storage.getItem('primary')).state.note, 'consolidato');
+    assert.equal(storage.getItem('draft'), null);
+});
+
+test('un errore di scrittura della bozza non viene dichiarato come salvataggio riuscito', () => {
+    const storage = {
+        getItem() { return null; },
+        setItem() { throw new Error('quota esaurita'); }
+    };
+    const result = persistDiarySnapshot(storage, {
+        primaryKey: 'primary',
+        draftKey: 'draft',
+        state: { note: 'non salvabile' },
+        savedAt: '2026-11-20T11:00:00.000Z',
+        recoveryMode: true
+    });
+    assert.equal(result.saved, false);
+    assert.equal(result.key, 'draft');
 });
 
 test('pagehide e cambio visibilità non scrivono se non c’è un salvataggio pendente', async () => {
@@ -215,5 +282,11 @@ test('pagehide e cambio visibilità non scrivono se non c’è un salvataggio pe
 
     assert.ok(start >= 0 && end > start);
     assert.match(flush, /if \(!saveTimeout\) return/);
-    assert.match(flush, /if \(!storageRecoveryBlocked\) saveNow\(\)/);
+    assert.match(flush, /saveNow\(\)/);
+    const scheduleStart = app.indexOf('function scheduleAutoSave()');
+    const scheduleEnd = app.indexOf('function flushSave()', scheduleStart);
+    const schedule = app.slice(scheduleStart, scheduleEnd);
+    assert.doesNotMatch(schedule, /if \(storageRecoveryBlocked\) return/);
+    assert.match(schedule, /storageRecoveryBlocked \? 'draft-saving' : 'saving'/);
+    assert.doesNotMatch(flush, /if \(!storageRecoveryBlocked\)/);
 });

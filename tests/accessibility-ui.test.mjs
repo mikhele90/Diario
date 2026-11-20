@@ -67,7 +67,7 @@ test('i pulsanti con sola icona hanno un target touch minimo di 44 × 44 px', ()
 });
 
 test('la nuova versione della cache PWA serve le modifiche di accessibilità', () => {
-    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v17'/);
+    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v18'/);
     for (const file of ['index.html', 'styles.css', 'app.js']) {
         assert.ok(serviceWorker.includes(file), `File non precaricato: ${file}`);
     }

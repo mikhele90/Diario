@@ -39,7 +39,7 @@ test('l’importazione non usa più la conferma nativa del browser', () => {
 test('il ripristino continua a includere la chiave di migrazione precedente tra le fonti', () => {
     assert.match(app, /const LEGACY_KEY = 'sos-smell-journey-set01-v1'/);
     assert.ok(app.includes('collectRecoverySnapshots('));
-    assert.ok(app.includes('[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]'));
+    assert.ok(app.includes('[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY]'));
     assert.ok(app.includes('fromLegacy = selected.key !== STORAGE_KEY'));
 });
 

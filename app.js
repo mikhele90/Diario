@@ -1,5 +1,5 @@
 import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, hasRecoverableDiaryContent, getArchiveEntriesNewestFirst, restoreArchivedPath, isValidDiaryState } from './src/diario-core.mjs';
-import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle, shouldWriteInitialState, selectBestRecoverySnapshot } from './src/storage-recovery.mjs';
+import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle, shouldWriteInitialState, selectBestRecoverySnapshot, persistDiarySnapshot } from './src/storage-recovery.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -137,9 +137,12 @@ import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle
         // =========================================================================
         const STORAGE_KEY = 'diario-olfattivo-v1';
         const CORRUPT_KEY = STORAGE_KEY + '-corrotto';
+        const DRAFT_KEY = STORAGE_KEY + '-bozza-recupero';
         let pendingCorruptRaw = null;
         let pendingCorruptSource = STORAGE_KEY;
         let storageRecoveryBlocked = false;
+        let recoveryDraftSaved = false;
+        let recoveryDraftSaveFailed = false;
         const LEGACY_KEY = 'sos-smell-journey-set01-v1';   // versione precedente: letta una volta e copiata nella chiave nuova
         let saveTimeout = null;
 
@@ -148,6 +151,10 @@ import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle
             if (!badge) return;
             if (status === 'saving') {
                 badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span><span class="text-amber-700">Salvataggio...</span>`;
+            } else if (status === 'draft-saving') {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span><span class="text-sky-700">Salvataggio copia protetta...</span>`;
+            } else if (status === 'draft-saved') {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-sky-600"></span><span class="text-sky-700">Modifiche salvate separatamente</span>`;
             } else if (status === 'saved') {
                 badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span class="text-emerald-700">Salvato su questo dispositivo</span>`;
             } else if (status === 'error') {
@@ -182,29 +189,45 @@ import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle
         }
 
         function saveNow() {
-            if (storageRecoveryBlocked) {
-                updateSyncBadge('error');
-                updateCorruptNotice();
-                return false;
-            }
+            const recoveryMode = storageRecoveryBlocked;
             try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: appState }));
-                updateSyncBadge('saved');
+                const result = persistDiarySnapshot(localStorage, {
+                    primaryKey: STORAGE_KEY,
+                    draftKey: DRAFT_KEY,
+                    state: appState,
+                    savedAt: new Date().toISOString(),
+                    recoveryMode
+                });
+                if (!result.saved) throw result.error || new Error('Salvataggio non verificato');
+
+                if (recoveryMode) {
+                    recoveryDraftSaved = true;
+                    recoveryDraftSaveFailed = false;
+                    updateSyncBadge('draft-saved');
+                    updateCorruptNotice();
+                } else {
+                    recoveryDraftSaved = false;
+                    recoveryDraftSaveFailed = false;
+                    updateSyncBadge('saved');
+                }
                 updateBackupInfo();
                 updateRefillInfo();
                 renderNextChoice();
                 return true;
             } catch (err) {
                 console.error('Errore salvataggio locale:', err);
+                if (recoveryMode) recoveryDraftSaveFailed = true;
                 updateSyncBadge('error');
+                updateCorruptNotice();
                 return false;
             }
         }
 
-        // Salvataggio automatico dopo ogni modifica (piccolo ritardo mentre scrivi)
+        // Salvataggio automatico dopo ogni modifica. Durante il recupero scrive
+        // in una bozza separata: i dati originali restano intatti e le nuove
+        // modifiche sopravvivono comunque alla chiusura e riapertura dell'app.
         function scheduleAutoSave() {
-            if (storageRecoveryBlocked) { updateSyncBadge('error'); return; }
-            updateSyncBadge('saving');
+            updateSyncBadge(storageRecoveryBlocked ? 'draft-saving' : 'saving');
             if (saveTimeout) clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => { saveTimeout = null; saveNow(); }, 300);
         }
@@ -213,7 +236,7 @@ import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle
             if (!saveTimeout) return;
             clearTimeout(saveTimeout);
             saveTimeout = null;
-            if (!storageRecoveryBlocked) saveNow();
+            saveNow();
         }
 
         // ---------- Promemoria backup ----------
@@ -586,9 +609,11 @@ function applySetStatics() {
             const message = document.getElementById('corrupt-banner-text');
             if (message) {
                 message.textContent = storageRecoveryBlocked
-                    ? ((hasRaw || hasCopy)
-                        ? 'Diario non riesce a caricare in sicurezza i dati locali. Per evitare di sovrascriverli, il salvataggio è bloccato: esporta il pacchetto completo di recupero e verifica il file prima di sbloccare l’app.'
-                        : 'Il browser non consente di leggere i dati locali. Il salvataggio resta bloccato per proteggerli: non cancellare i dati del sito; riapri l’app dopo aver ripristinato l’accesso allo spazio di archiviazione.')
+                    ? (recoveryDraftSaveFailed
+                        ? 'ATTENZIONE: il browser non ha confermato il salvataggio separato. Le ultime modifiche mostrate a schermo potrebbero non essere conservate. Non chiudere l’app; controlla lo spazio di archiviazione e riprova.'
+                        : recoveryDraftSaved
+                            ? 'Le nuove modifiche sono salvate in una copia di lavoro separata. I dati originali non vengono sovrascritti. Esporta il pacchetto completo di recupero prima di consolidare il diario.'
+                            : 'Modalità di recupero attiva: le nuove modifiche verranno salvate in una copia separata, senza toccare i dati originali. Esporta il pacchetto completo per poter consolidare il diario.')
                     : 'È presente una copia locale di dati non leggibili: esportala prima di eliminarla.';
             }
             const removeButton = document.getElementById('corrupt-delete-btn');
@@ -641,7 +666,7 @@ function applySetStatics() {
                 }
                 const collected = collectRecoverySnapshots(
                     readableStorage,
-                    [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY],
+                    [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY],
                     pending
                 );
                 if (collected.snapshots.length === 0) {
@@ -731,7 +756,7 @@ function applySetStatics() {
                 const readableStorage = localStorage;
                 stored = collectRecoverySnapshots(
                     readableStorage,
-                    [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]
+                    [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY]
                 );
             } catch (storageError) {
                 // Anche l'accesso alla proprietà localStorage può generare un'eccezione.
@@ -739,7 +764,7 @@ function applySetStatics() {
                 console.error('Impossibile accedere allo storage locale:', storageError);
                 stored = {
                     snapshots: [],
-                    unreadableKeys: [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]
+                    unreadableKeys: [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY]
                 };
             }
             const validCandidates = [];
@@ -763,13 +788,15 @@ function applySetStatics() {
             const selected = selectBestRecoverySnapshot(
                 validCandidates,
                 hasRecoverableDiaryContent,
-                STORAGE_KEY
+                STORAGE_KEY,
+                DRAFT_KEY
             );
 
             if (selected) {
                 appState = hydrateState(selected.state);
                 loaded = true;
                 fromLegacy = selected.key !== STORAGE_KEY;
+                recoveryDraftSaved = selected.key === DRAFT_KEY;
             }
 
             const invalidPrimary = invalidCandidates.find(item => item.key === STORAGE_KEY) || null;
@@ -781,7 +808,7 @@ function applySetStatics() {
             // esplicita. Non si scrive mai il default per "riparare" questi casi.
             const primaryUnreadable = stored.unreadableKeys.includes(STORAGE_KEY);
             const alternativeUnreadableWithoutProgress = !selectedHasProgress &&
-                stored.unreadableKeys.some(key => key === CORRUPT_KEY || key === LEGACY_KEY);
+                stored.unreadableKeys.some(key => key === CORRUPT_KEY || key === LEGACY_KEY || key === DRAFT_KEY);
             recoveryRequired =
                 primaryUnreadable ||
                 alternativeUnreadableWithoutProgress ||
@@ -807,7 +834,7 @@ function applySetStatics() {
             storageRecoveryBlocked = recoveryRequired;
 
             if (recoveryRequired) {
-                updateSyncBadge('error');
+                updateSyncBadge(recoveryDraftSaved ? 'draft-saved' : 'error');
             } else if (loaded && !fromLegacy) {
                 updateSyncBadge('saved');
             } else if (shouldWriteInitialState({ loaded, fromLegacy, recoveryRequired })) {
