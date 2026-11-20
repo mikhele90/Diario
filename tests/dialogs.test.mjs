@@ -7,9 +7,9 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 test('importazione e ripristino usano dialog accessibili con annullamento iniziale', () => {
     for (const name of ['restore', 'import']) {
-        assert.match(html, new RegExp(\`id="\${name}-modal" role="dialog" aria-modal="true" aria-labelledby="\${name}-dialog-title" aria-describedby="\${name}-dialog-description\`));
-        assert.match(html, new RegExp(\`id="\${name}-dialog-cancel" data-dialog-initial-focus\`));
-        assert.match(app, new RegExp(\`modal\\\\.id === '\${name}-modal'\`), \`Escape non chiude \${name}-modal\`);
+        assert.match(html, new RegExp('id="' + name + '-modal" role="dialog" aria-modal="true" aria-labelledby="' + name + '-dialog-title" aria-describedby="' + name + '-dialog-description'));
+        assert.match(html, new RegExp('id="' + name + '-dialog-cancel" data-dialog-initial-focus'));
+        assert.match(app, new RegExp('modal\\.id === \'' + name + '-modal\''), 'Escape non chiude ' + name + '-modal');
     }
     assert.doesNotMatch(app, /\bconfirm\s*\(/, 'non devono restare popup di conferma del browser');
 });
