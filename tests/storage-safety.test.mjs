@@ -42,7 +42,7 @@ test('l’esportazione della copia non la registra come backup ordinario', () =>
 
 test('l’avviso offre esportazione, eliminazione esplicita e rinvio', () => {
     assert.match(html, /id="corrupt-banner" role="alert"/);
-    for (const action of ['exportCorruptCopy', 'deleteCorruptCopy', 'dismissCorruptNotice']) {
+    for (const action of ['exportCorruptCopy', 'downloadCorruptCopy', 'deleteCorruptCopy', 'dismissCorruptNotice']) {
         assert.match(html, new RegExp(`onclick="${action}\\(\\)"`));
         assert.match(app, new RegExp(`\\b${action},`));
     }
