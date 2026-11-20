@@ -1,5 +1,5 @@
 import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, getArchiveEntriesNewestFirst, restoreArchivedPath, isValidDiaryState } from './src/diario-core.mjs';
-import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
+import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle, shouldWriteInitialState } from './src/storage-recovery.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -138,6 +138,7 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
         const STORAGE_KEY = 'diario-olfattivo-v1';
         const CORRUPT_KEY = STORAGE_KEY + '-corrotto';
         let pendingCorruptRaw = null;
+        let pendingCorruptSource = STORAGE_KEY;
         let storageRecoveryBlocked = false;
         const LEGACY_KEY = 'sos-smell-journey-set01-v1';   // versione precedente: letta una volta e copiata nella chiave nuova
         let saveTimeout = null;
@@ -586,7 +587,7 @@ function applySetStatics() {
             if (message) {
                 message.textContent = storageRecoveryBlocked
                     ? ((hasRaw || hasCopy)
-                        ? 'I dati originali non sono stati copiati in modo verificabile. Il salvataggio resta bloccato: esporta la copia e conferma solo dopo aver verificato che sia stata salvata fuori da Diario.'
+                        ? 'Diario non riesce a caricare in sicurezza i dati locali. Per evitare di sovrascriverli, il salvataggio è bloccato: esporta il pacchetto completo di recupero e verifica il file prima di sbloccare l’app.'
                         : 'Il browser non consente di leggere i dati locali. Il salvataggio resta bloccato per proteggerli: non cancellare i dati del sito; riapri l’app dopo aver ripristinato l’accesso allo spazio di archiviazione.')
                     : 'È presente una copia locale di dati non leggibili: esportala prima di eliminarla.';
             }
@@ -629,50 +630,65 @@ function applySetStatics() {
             showToast('Copia eliminata');
         }
         async function exportCorruptCopy() {
-            let raw = pendingCorruptRaw;
-            if (raw === null) {
-                try { raw = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
-            }
-            if (raw === null) {
-                updateCorruptNotice();
-                showToast('Copia non disponibile: il browser non consente di leggere i dati locali.');
+            let bundle;
+            try {
+                const pending = pendingCorruptRaw === null
+                    ? []
+                    : [{ key: pendingCorruptSource, raw: pendingCorruptRaw }];
+                const collected = collectRecoverySnapshots(
+                    localStorage,
+                    [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY],
+                    pending
+                );
+                if (collected.snapshots.length === 0) {
+                    updateCorruptNotice();
+                    showToast('Nessuna copia leggibile disponibile da esportare');
+                    return false;
+                }
+                bundle = createRecoveryBundle(collected);
+            } catch (err) {
+                console.error('Errore preparazione pacchetto di recupero:', err);
+                showToast('Impossibile preparare il pacchetto di recupero');
                 return false;
             }
+
             try {
                 if (navigator.share && navigator.canShare) {
-                    const file = new File([raw], 'Diario-Olfattivo-copia-dati-non-leggibili.json', { type: 'application/json' });
+                    const file = new File([bundle], 'Diario-recupero-completo.json', { type: 'application/json' });
                     if (navigator.canShare({ files: [file] })) {
-                        await navigator.share({ files: [file], title: 'Copia dei dati non leggibili' });
+                        await navigator.share({ files: [file], title: 'Pacchetto completo di recupero Diario' });
                         if (storageRecoveryBlocked) corruptCopyExported = true;
                         updateCorruptNotice();
                         showToast(storageRecoveryBlocked
-                            ? 'Condivisione completata: verifica di aver salvato il file fuori da Diario'
-                            : 'Copia condivisa');
+                            ? 'Condivisione completata: verifica di aver salvato il pacchetto fuori da Diario'
+                            : 'Pacchetto di recupero condiviso');
                         return true;
                     }
                 }
             } catch (err) {
                 if (err && err.name === 'AbortError') return false;
             }
+
             try {
-                const blob = new Blob([raw], { type: 'application/json' });
+                const blob = new Blob([bundle], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = 'Diario-Olfattivo-copia-dati-non-leggibili.json';
+                link.download = 'Diario-recupero-completo.json';
                 link.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             } catch (err) {
-                showToast('Impossibile esportare la copia');
+                showToast('Impossibile esportare il pacchetto di recupero');
                 return false;
             }
+
             if (storageRecoveryBlocked) {
                 corruptCopyExported = true;
                 updateCorruptNotice();
-                showToast('Download avviato: verifica di aver salvato il file prima di sbloccare il diario');
+                showToast('Download avviato: verifica il pacchetto prima di sbloccare il diario');
             } else {
                 updateCorruptNotice();
-                showToast('Copia esportata');
+                showToast('Pacchetto di recupero esportato');
             }
             return true;
         }
@@ -680,7 +696,7 @@ function applySetStatics() {
         function confirmCorruptRecovery() {
             if (!storageRecoveryBlocked || !corruptCopyExported) return;
             const confirmed = confirm(
-                'Hai verificato che il file con i dati originali è stato salvato in una posizione esterna e che puoi ritrovarlo? Solo allora il diario potrà sovrascrivere i dati locali non leggibili.'
+                'Hai verificato che il pacchetto completo di recupero sia salvato fuori da Diario e che puoi ritrovarlo? Proseguendo, l’app salverà lo stato attualmente visibile (che potrebbe essere vuoto) al posto dei dati principali. Le copie nel pacchetto non verranno eliminate.'
             );
             if (!confirmed) return;
             storageRecoveryBlocked = false;
@@ -695,10 +711,11 @@ function applySetStatics() {
             let loaded = false;
             let fromLegacy = false;
             let raw = null;
+            let recoveryRequired = false;
             try {
                 raw = localStorage.getItem(STORAGE_KEY);
-                // Mantiene il comportamento storico: una chiave principale vuota non
-                // deve impedire il recupero di dati ancora presenti nella chiave legacy.
+                // Mantiene il fallback storico: una chiave principale vuota non
+                // deve impedire la migrazione di dati presenti nella chiave legacy.
                 if (!raw) {
                     raw = localStorage.getItem(LEGACY_KEY);
                     fromLegacy = !!raw;
@@ -715,21 +732,32 @@ function applySetStatics() {
                 }
             } catch (err) {
                 console.error('Errore lettura dati locali:', err);
-                if (raw) {
+                recoveryRequired = true;
+                storageRecoveryBlocked = true;
+                if (raw !== null) {
                     pendingCorruptRaw = raw;
-                    let preserved = false;
-                    try { preserved = preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw); } catch (copyError) {
+                    pendingCorruptSource = fromLegacy ? LEGACY_KEY : STORAGE_KEY;
+                    try {
+                        // La copia locale è una protezione aggiuntiva, non autorizza mai
+                        // il salvataggio dello stato vuoto durante questo avvio.
+                        preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw);
+                    } catch (copyError) {
                         console.error('Impossibile conservare la copia di sicurezza:', copyError);
                     }
-                    storageRecoveryBlocked = !preserved;
-                    if (!storageRecoveryBlocked) pendingCorruptRaw = null;
-                } else {
-                    // Non possiamo sapere se esistano dati se il browser nega la lettura:
-                    // non scrivere mai lo stato vuoto in questa condizione.
-                    storageRecoveryBlocked = true;
                 }
             }
-            if (loaded && !fromLegacy) updateSyncBadge('saved'); else saveNow();
+
+            // Un archivio illeggibile/non valido non deve MAI essere sostituito
+            // automaticamente con createDefaultState(), neppure se la copia locale
+            // è riuscita: serve prima un'esportazione esplicita del pacchetto completo.
+            if (recoveryRequired) {
+                updateSyncBadge('error');
+            } else if (loaded && !fromLegacy) {
+                updateSyncBadge('saved');
+            } else if (shouldWriteInitialState({ loaded, fromLegacy, recoveryRequired })) {
+                saveNow();
+            }
+
             updateCorruptNotice();
             updateBackupInfo();
             updateRefillInfo();
