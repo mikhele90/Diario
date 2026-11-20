@@ -204,7 +204,8 @@ export function hasPathProgress(state) {
     );
     const profile = state.profile || {};
     return weekData || hasRecords(state.baseline) || pauseData ||
-        hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep);
+        hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep) ||
+        isValidDateOnly(state.refill?.last);
 }
 
 /** Associa l'indice originale a ogni voce prima di invertirne l'ordine di visualizzazione. */
