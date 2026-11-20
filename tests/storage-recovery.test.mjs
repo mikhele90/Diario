@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { hasRecoverableDiaryContent } from '../src/diario-core.mjs';
 import {
     preserveCorruptSnapshot,
     collectRecoverySnapshots,
@@ -289,4 +290,36 @@ test('pagehide e cambio visibilità non scrivono se non c’è un salvataggio pe
     assert.doesNotMatch(schedule, /if \(storageRecoveryBlocked\) return/);
     assert.match(schedule, /storageRecoveryBlocked \? 'draft-saving' : 'saving'/);
     assert.doesNotMatch(flush, /if \(!storageRecoveryBlocked\)/);
+});
+
+test('al riavvio preferisce una bozza valida anche se contiene solo modifiche non classificate come progressi', () => {
+    const historicalBackup = {
+        key: 'diario-olfattivo-v1-corrotto',
+        state: {
+            weeks: {
+                1: { days: [{ morning: true }] }
+            }
+        }
+    };
+    const latestDraft = {
+        key: 'diario-olfattivo-v1-bozza-recupero',
+        state: {
+            profile: { startDate: '2026-11-21' },
+            weeks: {}
+        }
+    };
+
+    // La vecchia copia contiene progressi, ma la bozza rappresenta la modifica
+    // salvata più di recente anche se la sola data non conta come progresso.
+    assert.equal(hasRecoverableDiaryContent(historicalBackup.state), true);
+    assert.equal(hasRecoverableDiaryContent(latestDraft.state), false);
+
+    const selected = selectBestRecoverySnapshot(
+        [historicalBackup, latestDraft],
+        hasRecoverableDiaryContent,
+        'diario-olfattivo-v1',
+        'diario-olfattivo-v1-bozza-recupero'
+    );
+
+    assert.equal(selected, latestDraft);
 });
