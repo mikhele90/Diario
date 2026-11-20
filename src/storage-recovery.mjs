@@ -74,3 +74,17 @@ export function createRecoveryBundle(recovery, exportedAt = new Date().toISOStri
 export function shouldWriteInitialState({ loaded = false, fromLegacy = false, recoveryRequired = false } = {}) {
     return !recoveryRequired && (!loaded || fromLegacy);
 }
+
+/**
+ * Sceglie la migliore copia valida: privilegia una copia con progressi rispetto a
+ * una struttura vuota e, a parità, mantiene la chiave primaria come fonte principale.
+ */
+export function selectBestRecoverySnapshot(candidates, hasProgress = () => false, primaryKey = 'diario-olfattivo-v1') {
+    const valid = Array.isArray(candidates)
+        ? candidates.filter(item => item && typeof item.key === 'string' && item.state && typeof item.state === 'object')
+        : [];
+    return valid.find(item => hasProgress(item.state)) ||
+        valid.find(item => item.key === primaryKey) ||
+        valid[0] ||
+        null;
+}
