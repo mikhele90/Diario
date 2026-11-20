@@ -59,3 +59,18 @@ test('l’avvio valida il formato locale prima di idratare e blocca i salvataggi
     assert.match(app, /if \(storageRecoveryBlocked\) \{\s*showToast\('Prima esporta la copia dei dati originali/);
     assert.match(app, /const LEGACY_KEY = 'sos-smell-journey-set01-v1'/);
 });
+
+
+test('l’esportazione non sblocca da sola la sovrascrittura: serve una conferma esplicita', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const start = app.indexOf('async function exportCorruptCopy()');
+    const end = app.indexOf('function initLocalSave()', start);
+    const flow = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.match(flow, /corruptCopyExported = true/);
+    assert.match(flow, /function confirmCorruptRecovery\(\)/);
+    assert.match(flow, /if \(!storageRecoveryBlocked \|\| !corruptCopyExported\) return/);
+    assert.match(flow, /confirm\(/);
+    assert.doesNotMatch(flow, /storageRecoveryBlocked = false/);
+    assert.match(app, /onclick="confirmCorruptRecovery\(\)"/);
+});
