@@ -206,7 +206,7 @@ export function hasPathProgress(state) {
     const profile = state.profile || {};
     return hasWeekData || hasRecords(state.baseline) || hasPauseData ||
         hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep) ||
-        !!(state.refill && state.refill.last);
+        !!state.nextChoice || !!(state.refill && state.refill.last);
 }
 
 /**
