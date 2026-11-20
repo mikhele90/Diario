@@ -631,6 +631,26 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
             }
         }
 
+        function completeCorruptRecoveryExport(raw) {
+            if (corruptRecoveryBlocked && corruptRawInMemory === raw) {
+                corruptRawInMemory = null;
+                corruptRecoveryBlocked = false;
+                saveNow();
+            }
+            updateCorruptNotice();
+        }
+
+        function downloadCorruptCopy() {
+            let raw = corruptRawInMemory;
+            if (!raw) {
+                try { raw = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            }
+            if (!raw) { updateCorruptNotice(); return false; }
+            const exported = downloadRecoveryCopy(raw, 'Diario-Olfattivo-copia-dati-non-leggibili');
+            if (exported) completeCorruptRecoveryExport(raw);
+            return exported;
+        }
+
         async function exportCorruptCopy() {
             let raw = corruptRawInMemory;
             if (!raw) {
@@ -639,28 +659,22 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
             if (!raw) { updateCorruptNotice(); return false; }
 
             const name = 'Diario-Olfattivo-copia-dati-non-leggibili';
-            let exported = false;
             try {
-                if (navigator.share && navigator.canShare && typeof File === 'function') {
-                    const file = new File([raw], name + '.json', { type: 'application/json' });
-                    if (navigator.canShare({ files: [file] })) {
-                        await navigator.share({ files: [file], title: 'Copia dei dati non leggibili' });
-                        exported = true;
-                        showToast('Copia dei dati condivisa');
-                    }
+                if (!navigator.share || !navigator.canShare || typeof File !== 'function') {
+                    return downloadCorruptCopy();
                 }
+                const file = new File([raw], name + '.json', { type: 'application/json' });
+                if (!navigator.canShare({ files: [file] })) return downloadCorruptCopy();
+                await navigator.share({ files: [file], title: 'Copia dei dati non leggibili' });
+                showToast('Copia dei dati condivisa');
+                completeCorruptRecoveryExport(raw);
+                return true;
             } catch (err) {
                 if (err && err.name === 'AbortError') return false;
+                // Dopo un errore asincrono non avviare un download senza un nuovo gesto esplicito.
+                showToast('Condivisione non riuscita: usa "Scarica la copia"');
+                return false;
             }
-            if (!exported) exported = downloadRecoveryCopy(raw, name);
-
-            if (exported && corruptRecoveryBlocked && corruptRawInMemory === raw) {
-                corruptRawInMemory = null;
-                corruptRecoveryBlocked = false;
-                saveNow();
-            }
-            updateCorruptNotice();
-            return exported;
         }
 
         function deleteCorruptCopy() {
@@ -678,7 +692,6 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
             corruptDeleteArmed = false;
             try { localStorage.removeItem(CORRUPT_KEY); } catch (e) {}
             corruptRawInMemory = null;
-            const wasBlocked = corruptRecoveryBlocked;
             corruptRecoveryBlocked = false;
             if (button) button.textContent = 'Elimina la copia';
             corruptDismissed = false;
@@ -1630,6 +1643,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
             closeImportDialog,
             confirmImport,
             exportCorruptCopy,
+            downloadCorruptCopy,
             deleteCorruptCopy,
             dismissCorruptNotice,
             otherSetId,
