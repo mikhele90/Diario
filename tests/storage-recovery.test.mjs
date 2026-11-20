@@ -142,7 +142,7 @@ test('l’avvio non sovrascrive un archivio non valido dopo aver tentato la copi
     assert.match(init, /\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY\]/);
     assert.match(init, /preserveCorruptSnapshot\(localStorage, CORRUPT_KEY, invalidPrimary\.raw\)/);
     assert.match(init, /storageRecoveryBlocked = recoveryRequired/);
-    assert.match(init, /selectedHasProgress = selected && hasRecoverableDiaryContent\\(selected\\.state\\)/);
+    assert.ok(init.includes('const selectedHasProgress = selected && hasRecoverableDiaryContent(selected.state);'));
     assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\('error'\);/);
     assert.match(init, /shouldWriteInitialState\(\{ loaded, fromLegacy, recoveryRequired \}\)/);
 });
