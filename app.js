@@ -1,4 +1,5 @@
-import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, isValidDiaryState } from './src/diario-core.mjs';
+import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, getArchiveEntriesNewestFirst, restoreArchivedPath, isValidDiaryState } from './src/diario-core.mjs';
+import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -135,6 +136,9 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
         // SALVATAGGIO LOCALE (localStorage del browser, nessun dato esce dal dispositivo)
         // =========================================================================
         const STORAGE_KEY = 'diario-olfattivo-v1';
+        const CORRUPT_KEY = STORAGE_KEY + '-corrotto';
+        let pendingCorruptRaw = null;
+        let storageRecoveryBlocked = false;
         const LEGACY_KEY = 'sos-smell-journey-set01-v1';   // versione precedente: letta una volta e copiata nella chiave nuova
         let saveTimeout = null;
 
@@ -177,6 +181,11 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
         }
 
         function saveNow() {
+            if (storageRecoveryBlocked) {
+                updateSyncBadge('error');
+                updateCorruptNotice();
+                return false;
+            }
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: appState }));
                 updateSyncBadge('saved');
@@ -193,13 +202,15 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
 
         // Salvataggio automatico dopo ogni modifica (piccolo ritardo mentre scrivi)
         function scheduleAutoSave() {
+            if (storageRecoveryBlocked) { updateSyncBadge('error'); return; }
             updateSyncBadge('saving');
             if (saveTimeout) clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => { saveTimeout = null; saveNow(); }, 300);
         }
 
         function flushSave() {
-            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; saveNow(); }
+            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+            if (!storageRecoveryBlocked) saveNow();
         }
 
         // ---------- Promemoria backup ----------
@@ -292,7 +303,7 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             if (!card || !list) return;
             const arch = appState.archive || [];
             card.classList.toggle('hidden', arch.length === 0);
-            list.innerHTML = arch.slice().reverse().map(e => {
+            list.innerHTML = getArchiveEntriesNewestFirst(arch).map(({ entry: e, index: i }) => {
                 const st = e.state, def = SET_DEFS[e.setId] || SET_DEFS.set01;
                 const sess = Object.values(st.weeks).reduce((n, w) => n + w.days.filter(d => d.morning).length + w.days.filter(d => d.evening).length, 0);
                 const val = v => escapeHtml((v === null || v === undefined) ? '–' : v);
@@ -300,7 +311,123 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 return `<div class="rounded-2xl border border-stone-200 p-4"><div class="font-bold text-sm text-stone-900">${def.name} · ${fmtDate(st.profile.startDate)} – ${fmtDate(st.profile.startDate, 83)}</div><div class="text-xs text-stone-500 mt-0.5">${sess}/168 sessioni · punteggi: inizio → sett. 4 → 8 → 12</div><ul class="mt-2 space-y-0.5 text-xs text-stone-600">${rows}</ul></div>`;
             }).join('');
         }
-        function applySetStatics() {
+
+        let pendingRestore = null;
+        function openRestoreDialog(index) {
+            const entry = (appState.archive || [])[index];
+            if (!entry) return;
+            pendingRestore = index;
+            const set = SET_DEFS[entry.setId] || SET_DEFS.set01;
+            const date = entry.state?.profile?.startDate;
+            document.getElementById('restore-what').textContent =
+                'Torni al percorso con il ' + set.name + ' iniziato il ' + (date ? fmtDate(date) : 'data non indicata') + '.';
+            document.getElementById('restore-current').textContent = hasPathProgress(appState)
+                ? 'Il percorso attuale viene archiviato prima del ripristino: non perdi i progressi.'
+                : 'Il percorso attuale non contiene progressi e verrà sostituito.';
+            openAccessibleModal(document.getElementById('restore-modal'), '#restore-dialog-cancel');
+        }
+        function closeRestoreDialog() {
+            pendingRestore = null;
+            closeAccessibleModal(document.getElementById('restore-modal'));
+        }
+        function confirmRestore() {
+            const index = pendingRestore;
+            closeRestoreDialog();
+            if (index !== null) restoreArchived(index);
+        }
+        function restoreArchived(index) {
+            const restored = restoreArchivedPath(appState, index);
+            if (!restored) {
+                showToast('Impossibile riprendere il percorso: controlla l’archivio e lo spazio disponibile.');
+                return;
+            }
+            appState = hydrateState(restored);
+            viewPause = 0;
+            lastPillsWeek = null;
+            saveNow();
+            applySetStatics();
+            switchTab('calendario');
+            const calendarNav = document.getElementById('nav-calendario');
+            if (calendarNav) calendarNav.focus({ preventScroll: true });
+            showToast('Percorso ripreso');
+        }
+
+        let pendingImport = null;
+        function openImportDialog(candidate) {
+            // Completa i campi mancanti dei backup legacy prima di calcolare le sessioni.
+            const normalized = deepMerge(createDefaultState(), candidate);
+            pendingImport = candidate;
+            const set = SET_DEFS[candidate.setId] || SET_DEFS.set01;
+            const sessions = Object.values(normalized.weeks || {}).reduce((count, week) => {
+                const days = Array.isArray(week?.days) ? week.days : [];
+                return count + days.filter(day => day?.morning).length + days.filter(day => day?.evening).length;
+            }, 0);
+            const date = normalized.profile?.startDate;
+            document.getElementById('import-what').textContent =
+                'Il file contiene un percorso con il ' + set.name + ' iniziato il ' +
+                (date ? fmtDate(date) : 'data non indicata') + ', con ' + sessions + ' sessioni segnate.';
+            openAccessibleModal(document.getElementById('import-modal'), '#import-dialog-cancel');
+        }
+        function closeImportDialog() {
+            pendingImport = null;
+            closeAccessibleModal(document.getElementById('import-modal'));
+        }
+        function confirmImport() {
+            if (storageRecoveryBlocked) {
+                showToast('Prima esporta la copia dei dati originali: il salvataggio è bloccato per proteggerli.');
+                return;
+            }
+            const candidate = pendingImport;
+            if (!candidate) return;
+            closeImportDialog();
+            appState = hydrateState(candidate);
+            viewPause = 0;
+            lastPillsWeek = null;
+            saveNow();
+            applySetStatics();
+            switchTab('calendario');
+            const calendarNav = document.getElementById('nav-calendario');
+            if (calendarNav) calendarNav.focus({ preventScroll: true });
+            showToast('Diario importato');
+        }
+
+        function importData(event) {
+            const input = event.target;
+            const file = input.files && input.files[0];
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('Backup troppo grande (massimo 5 MB)');
+                input.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    const candidate = isPlainObject(parsed) &&
+                        Object.prototype.hasOwnProperty.call(parsed, 'state') ? parsed.state : parsed;
+                    if (!isValidDiaryState(candidate)) {
+                        showToast('Backup non valido o danneggiato');
+                        return;
+                    }
+                    openImportDialog(candidate);
+                } catch (err) {
+                    console.error('Errore importazione backup:', err);
+                    showToast('File non valido');
+                } finally {
+                    input.value = '';
+                }
+            };
+            reader.onerror = () => {
+                input.value = '';
+                showToast('Impossibile leggere il file');
+            };
+            reader.readAsText(file);
+        }
+
+        // =========================================================================
+        // TIMER GUIDATO DEL RITUALE
             const set = SET_DEFS[appState.setId] || SET_DEFS.set01;
             ['set-badge', 'guide-set-badge'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = set.name; });
             document.querySelectorAll('[data-scent-th]').forEach(th => { th.textContent = SCENTS[+th.dataset.scentTh].name.split(' ')[0]; });
@@ -360,6 +487,8 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
                 event.preventDefault();
                 if (modal.id === 'ritual-modal') closeRitualModal();
                 else if (modal.id === 'newpath-modal') closeNewPathDialog();
+                else if (modal.id === 'restore-modal') closeRestoreDialog();
+                else if (modal.id === 'import-modal') closeImportDialog();
                 return;
             }
             if (event.key !== 'Tab') return;
@@ -473,21 +602,136 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             }
         }
 
+        let corruptDismissed = false;
+        let corruptDeleteArmed = false;
+        function updateCorruptNotice() {
+            const banner = document.getElementById('corrupt-banner');
+            if (!banner) return;
+            let stored = null;
+            try { stored = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            const hasCopy = stored !== null;
+            const hasRaw = pendingCorruptRaw !== null;
+            const show = hasCopy || hasRaw;
+            banner.classList.toggle('hidden', !show || (!storageRecoveryBlocked && corruptDismissed));
+            const message = document.getElementById('corrupt-banner-text');
+            if (message) {
+                message.textContent = storageRecoveryBlocked
+                    ? 'I dati originali non sono stati copiati in modo verificabile. Il salvataggio resta bloccato per non sovrascriverli: esporta questa copia prima di continuare.'
+                    : 'I dati salvati non erano leggibili. Ne è stata conservata una copia locale: esportala prima di eliminarla.';
+            }
+            const removeButton = document.getElementById('corrupt-delete-btn');
+            if (removeButton) removeButton.classList.toggle('hidden', storageRecoveryBlocked || !hasCopy);
+            const laterButton = document.getElementById('corrupt-dismiss-btn');
+            if (laterButton) laterButton.classList.toggle('hidden', storageRecoveryBlocked);
+        }
+        function dismissCorruptNotice() {
+            if (storageRecoveryBlocked) return;
+            corruptDismissed = true;
+            updateCorruptNotice();
+        }
+        function deleteCorruptCopy() {
+            const btn = document.getElementById('corrupt-delete-btn');
+            if (storageRecoveryBlocked) return;
+            if (!corruptDeleteArmed) {
+                corruptDeleteArmed = true;
+                if (btn) btn.textContent = 'Tocca ancora per eliminare';
+                setTimeout(() => {
+                    corruptDeleteArmed = false;
+                    if (btn) btn.textContent = 'Elimina la copia';
+                }, 4000);
+                return;
+            }
+            corruptDeleteArmed = false;
+            try {
+                localStorage.removeItem(CORRUPT_KEY);
+                if (localStorage.getItem(CORRUPT_KEY) !== null) throw new Error('La copia non è stata eliminata');
+            } catch (err) {
+                showToast('Non è stato possibile eliminare la copia');
+                return;
+            }
+            if (btn) btn.textContent = 'Elimina la copia';
+            updateCorruptNotice();
+            showToast('Copia eliminata');
+        }
+        async function exportCorruptCopy() {
+            let raw = pendingCorruptRaw;
+            if (raw === null) {
+                try { raw = localStorage.getItem(CORRUPT_KEY); } catch (e) {}
+            }
+            if (raw === null) {
+                updateCorruptNotice();
+                showToast('Copia non disponibile');
+                return false;
+            }
+            const wasBlocked = storageRecoveryBlocked;
+            try {
+                if (navigator.share && navigator.canShare) {
+                    const file = new File([raw], 'Diario-Olfattivo-copia-dati-non-leggibili.json', { type: 'application/json' });
+                    if (navigator.canShare({ files: [file] })) {
+                        await navigator.share({ files: [file], title: 'Copia dei dati non leggibili' });
+                        pendingCorruptRaw = null;
+                        storageRecoveryBlocked = false;
+                        corruptDismissed = false;
+                        if (wasBlocked) saveNow();
+                        updateCorruptNotice();
+                        showToast('Copia condivisa');
+                        return true;
+                    }
+                }
+            } catch (err) {
+                if (err && err.name === 'AbortError') return false;
+            }
+            try {
+                const blob = new Blob([raw], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'Diario-Olfattivo-copia-dati-non-leggibili.json';
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (err) {
+                showToast('Impossibile esportare la copia');
+                return false;
+            }
+            pendingCorruptRaw = null;
+            storageRecoveryBlocked = false;
+            corruptDismissed = false;
+            if (wasBlocked) saveNow();
+            updateCorruptNotice();
+            showToast('Copia esportata');
+            return true;
+        }
+
         function initLocalSave() {
             let loaded = false;
             let fromLegacy = false;
+            let raw = null;
             try {
-                let raw = localStorage.getItem(STORAGE_KEY);
-                if (!raw) { raw = localStorage.getItem(LEGACY_KEY); fromLegacy = !!raw; }
-                if (raw) {
+                raw = localStorage.getItem(STORAGE_KEY);
+                if (raw === null) {
+                    raw = localStorage.getItem(LEGACY_KEY);
+                    fromLegacy = raw !== null;
+                }
+                if (raw !== null) {
                     const parsed = JSON.parse(raw);
-                    appState = hydrateState(parsed.state || parsed);
+                    const candidate = isPlainObject(parsed) &&
+                        Object.prototype.hasOwnProperty.call(parsed, 'state') ? parsed.state : parsed;
+                    if (!isValidDiaryState(candidate)) {
+                        throw new Error('I dati locali non rispettano il formato previsto');
+                    }
+                    appState = hydrateState(candidate);
                     loaded = true;
                 }
             } catch (err) {
                 console.error('Errore lettura dati locali:', err);
+                if (raw !== null) {
+                    pendingCorruptRaw = raw;
+                    storageRecoveryBlocked = !preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw);
+                    if (!storageRecoveryBlocked) pendingCorruptRaw = null;
+                }
             }
             if (loaded && !fromLegacy) updateSyncBadge('saved'); else saveNow();
+            updateCorruptNotice();
             updateBackupInfo();
             updateRefillInfo();
             applySetStatics();
@@ -1398,6 +1642,15 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, is
             markRefilled,
             dismissRefillBanner,
             importData,
+            openRestoreDialog,
+            closeRestoreDialog,
+            confirmRestore,
+            openImportDialog,
+            closeImportDialog,
+            confirmImport,
+            exportCorruptCopy,
+            deleteCorruptCopy,
+            dismissCorruptNotice,
             openRitualModal,
             closeRitualModal,
             toggleTimer,
