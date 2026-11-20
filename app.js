@@ -704,10 +704,17 @@ function applySetStatics() {
             );
             if (!confirmed) return;
             storageRecoveryBlocked = false;
+            if (!saveNow()) {
+                // Un errore di scrittura dopo la conferma non deve lasciare l'app
+                // apparentemente sbloccata ma incapace di salvare in modo affidabile.
+                storageRecoveryBlocked = true;
+                updateCorruptNotice();
+                showToast('Salvataggio non riuscito: i dati restano protetti e il blocco rimane attivo');
+                return;
+            }
             pendingCorruptRaw = null;
             corruptCopyExported = false;
             corruptDismissed = false;
-            saveNow();
             updateCorruptNotice();
         }
 
@@ -753,7 +760,6 @@ function applySetStatics() {
                 }
             }
 
-            const today = localDateStr();
             const selected = selectBestRecoverySnapshot(
                 validCandidates,
                 hasRecoverableDiaryContent,
@@ -768,7 +774,7 @@ function applySetStatics() {
 
             const invalidPrimary = invalidCandidates.find(item => item.key === STORAGE_KEY) || null;
             const invalidBackup = invalidCandidates.find(item => item.key !== STORAGE_KEY) || null;
-            const selectedHasProgress = selected && hasAnyDiaryData(selected.state, today);
+            const selectedHasProgress = selected && hasRecoverableDiaryContent(selected.state);
 
             // Un archivio primario non valido, una chiave illeggibile o una copia
             // alternativa potenzialmente più ricca richiedono sempre una decisione
