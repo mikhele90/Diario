@@ -1,35 +1,54 @@
-// index.html: prima la rete (se risponde entro 3 s), altrimenti la copia salvata, così gli aggiornamenti
-// arrivano alla prima apertura e l'app funziona anche offline. Cambia la versione solo se modifichi FILES.
+// Le risorse di codice vengono aggiornate dalla rete con timeout e fallback cache.
+// Le altre risorse same-origin restano cache-first per ridurre richieste e mantenere l'offline.
 const CACHE_PREFIX = 'diario-olfattivo-';
-const CACHE = 'diario-olfattivo-v16';
+const CACHE = 'diario-olfattivo-v17';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'src/diario-core.mjs', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icon.svg', 'icon-maskable.svg'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => {
-  e.waitUntil(
+
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
     caches.keys()
-      .then(ks => Promise.all(ks
-        .filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE)
-        .map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys
+        .filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE)
+        .map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
 
-function networkFirst(req) {
-  const fromNet = fetch(req.url, { cache: 'no-cache' }).then(res => {
-    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put('index.html', copy)); }
-    return res;
+function networkFirst(request, cacheKey = request) {
+  const network = fetch(request.url, { cache: 'no-cache' }).then(response => {
+    if (response.ok) {
+      caches.open(CACHE)
+        .then(cache => cache.put(cacheKey, response.clone()))
+        .catch(() => {});
+    }
+    return response;
   });
   const timeout = new Promise(resolve => setTimeout(() => resolve(null), 3000));
-  return Promise.race([fromNet.catch(() => null), timeout])
-    .then(res => res || caches.match('index.html').then(c => c || fromNet));
+  return Promise.race([network.catch(() => null), timeout]).then(response => {
+    if (response) return response;
+    return caches.match(cacheKey, { ignoreSearch: true }).then(cached => cached || network);
+  });
 }
 
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  const url = new URL(e.request.url);
-  if (e.request.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')) {
-    e.respondWith(networkFirst(e.request));
+function isRefreshableAsset(pathname) {
+  return /\\/(?:app\\.js|styles\\.css|manifest\\.webmanifest|icon\\.svg|icon-maskable\\.svg|src\\/diario-core\\.mjs)$/.test(pathname);
+}
+
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (request.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')) {
+    event.respondWith(networkFirst(request, 'index.html'));
+  } else if (isRefreshableAsset(url.pathname)) {
+    event.respondWith(networkFirst(request));
   } else {
-    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));
+    event.respondWith(caches.match(request, { ignoreSearch: true }).then(cached => cached || fetch(request)));
   }
 });
