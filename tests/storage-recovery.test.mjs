@@ -142,6 +142,7 @@ test('l’avvio non sovrascrive un archivio non valido dopo aver tentato la copi
     assert.match(init, /\[STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY\]/);
     assert.match(init, /preserveCorruptSnapshot\(localStorage, CORRUPT_KEY, invalidPrimary\.raw\)/);
     assert.match(init, /storageRecoveryBlocked = recoveryRequired/);
+    assert.match(init, /selectedHasProgress = selected && hasRecoverableDiaryContent\\(selected\\.state\\)/);
     assert.match(init, /if \(recoveryRequired\) \{\s*updateSyncBadge\('error'\);/);
     assert.match(init, /shouldWriteInitialState\(\{ loaded, fromLegacy, recoveryRequired \}\)/);
 });
@@ -177,6 +178,7 @@ test('l’esportazione non sblocca da sola la scrittura: serve conferma esplicit
     assert.match(confirmFlow, /if \(!storageRecoveryBlocked \|\| !corruptCopyExported\) return/);
     assert.match(confirmFlow, /confirm\(/);
     assert.match(confirmFlow, /storageRecoveryBlocked = false/);
+    assert.match(confirmFlow, /if \(!saveNow\(\)\)/);
     assert.match(html, /onclick="confirmCorruptRecovery\(\)"/);
 });
 
