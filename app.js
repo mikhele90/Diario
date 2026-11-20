@@ -683,7 +683,8 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
             if (button) button.textContent = 'Elimina la copia';
             corruptDismissed = false;
             updateCorruptNotice();
-            if (wasBlocked) saveNow();
+            // La rimozione libera spazio: riprova anche il salvataggio iniziale eventualmente fallito.
+            saveNow();
             showToast('Copia eliminata');
         }
 
