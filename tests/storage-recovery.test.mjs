@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { preserveCorruptSnapshot } from '../src/storage-recovery.mjs';
+import { readFile } from 'node:fs/promises';
 
 function createStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
@@ -38,4 +39,23 @@ test('rifiuta argomenti non validi senza tentare scritture', () => {
     assert.equal(preserveCorruptSnapshot(null, 'backup', 'raw'), false);
     assert.equal(preserveCorruptSnapshot({}, 'backup', 'raw'), false);
     assert.equal(preserveCorruptSnapshot({ getItem() {}, setItem() {} }, '', 'raw'), false);
+});
+
+
+test('l’avvio valida il formato locale prima di idratare e blocca i salvataggi se la copia fallisce', async () => {
+    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const saveStart = app.indexOf('function saveNow()');
+    const saveEnd = app.indexOf('function scheduleAutoSave()', saveStart);
+    const initStart = app.indexOf('function initLocalSave()');
+    const initEnd = app.indexOf('function renderActiveTab()', initStart);
+    const saveBody = app.slice(saveStart, saveEnd);
+    const initBody = app.slice(initStart, initEnd);
+    assert.ok(saveStart >= 0 && saveEnd > saveStart);
+    assert.ok(initStart >= 0 && initEnd > initStart);
+    assert.ok(saveBody.indexOf('if (storageRecoveryBlocked)') < saveBody.indexOf('localStorage.setItem(STORAGE_KEY'));
+    assert.ok(initBody.indexOf('isValidDiaryState(candidate)') < initBody.indexOf('hydrateState(candidate)'));
+    assert.match(initBody, /preserveCorruptSnapshot\(localStorage, CORRUPT_KEY, raw\)/);
+    assert.match(initBody, /storageRecoveryBlocked = !preserved/);
+    assert.match(app, /if \(storageRecoveryBlocked\) \{\s*showToast\('Prima esporta la copia dei dati originali/);
+    assert.match(app, /const LEGACY_KEY = 'sos-smell-journey-set01-v1'/);
 });
