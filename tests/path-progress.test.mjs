@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasPathProgress } from '../src/diario-core.mjs';
+import { createRestoredState, hasPathProgress } from '../src/diario-core.mjs';
 
 const empty = () => ({
     setId: 'set01',
@@ -61,4 +61,51 @@ test('sessioni, punteggi, note e riflessioni sono avanzamento', () => {
         change(state);
         assert.equal(hasPathProgress(state), true);
     }
+});
+
+
+test('ripristina l’indice originale dell’archivio dopo che l’elenco è mostrato al contrario', () => {
+    const current = empty();
+    const makeEntry = id => ({ setId: id, state: { ...empty(), setId: id } });
+    current.archive = [makeEntry('set01'), makeEntry('set02'), makeEntry('set03')];
+    const restored = createRestoredState(current, 0, '2026-11-20T08:00:00.000Z');
+    assert.equal(restored.setId, 'set01');
+    assert.deepEqual(restored.archive.map(entry => entry.setId), ['set02', 'set03']);
+});
+
+test('ripristinare archivia il percorso corrente senza perdere i dati e conserva le preferenze globali', () => {
+    const current = empty();
+    current.profile.name = 'Michele';
+    current.profile.morningTime = '07:15';
+    current.profile.eveningTime = '20:30';
+    current.weeks[1].days[0].morning = true;
+    current.weeks[1].otherNotes = 'nota da non perdere';
+    current.archive = [{ setId: 'set02', state: { ...empty(), setId: 'set02' } }];
+    const restored = createRestoredState(current, 0, '2026-11-20T08:00:00.000Z');
+    assert.equal(restored.profile.name, 'Michele');
+    assert.equal(restored.profile.morningTime, '07:15');
+    assert.equal(restored.profile.eveningTime, '20:30');
+    assert.equal(restored.archive.length, 1);
+    assert.equal(restored.archive[0].setId, 'set01');
+    assert.equal(restored.archive[0].state.weeks[1].days[0].morning, true);
+    assert.equal(restored.archive[0].state.weeks[1].otherNotes, 'nota da non perdere');
+    assert.equal(restored.archive[0].archivedAt, '2026-11-20T08:00:00.000Z');
+});
+
+test('una ricarica più recente viene mantenuta solo riprendendo lo stesso set', () => {
+    const current = empty();
+    current.refill.last = '2026-11-19';
+    current.archive = [{ setId: 'set01', state: { ...empty(), setId: 'set01', refill: { last: '2026-10-01' } } }];
+    assert.equal(createRestoredState(current, 0).refill.last, '2026-11-19');
+
+    current.archive = [{ setId: 'set02', state: { ...empty(), setId: 'set02', refill: { last: '2026-10-01' } } }];
+    assert.equal(createRestoredState(current, 0).refill.last, '2026-10-01');
+});
+
+test('il ripristino rifiuta indici fuori intervallo o voci incomplete', () => {
+    const current = empty();
+    current.archive = [{ setId: 'set01', state: empty() }];
+    assert.equal(createRestoredState(current, -1), null);
+    assert.equal(createRestoredState(current, 1), null);
+    assert.equal(createRestoredState({ ...current, archive: [{ setId: 'set01' }] }, 0), null);
 });
