@@ -36,7 +36,11 @@ test('l’esportazione della copia non la registra come backup ordinario', () =>
     const body = app.slice(start, end);
     assert.match(body, /corruptRawInMemory/);
     assert.match(body, /navigator\.share/);
-    assert.match(body, /downloadRecoveryCopy\(raw, name\)/);
+    assert.match(body, /return downloadCorruptCopy\(\)/);
+    const downloadStart = app.indexOf('function downloadCorruptCopy()');
+    const downloadEnd = app.indexOf('async function exportCorruptCopy()', downloadStart);
+    const download = app.slice(downloadStart, downloadEnd);
+    assert.match(download, /downloadRecoveryCopy\(raw, 'Diario-Olfattivo-copia-dati-non-leggibili'\)/);
     assert.doesNotMatch(body, /markBackupDone/);
 });
 
