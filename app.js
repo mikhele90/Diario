@@ -626,21 +626,19 @@ function applySetStatics() {
             }
             if (raw === null) {
                 updateCorruptNotice();
-                showToast('Copia non disponibile');
+                showToast('Copia non disponibile: il browser non consente di leggere i dati locali.');
                 return false;
             }
-            const wasBlocked = storageRecoveryBlocked;
             try {
                 if (navigator.share && navigator.canShare) {
                     const file = new File([raw], 'Diario-Olfattivo-copia-dati-non-leggibili.json', { type: 'application/json' });
                     if (navigator.canShare({ files: [file] })) {
                         await navigator.share({ files: [file], title: 'Copia dei dati non leggibili' });
-                        pendingCorruptRaw = null;
-                        storageRecoveryBlocked = false;
-                        corruptDismissed = false;
-                        if (wasBlocked) saveNow();
+                        if (storageRecoveryBlocked) corruptCopyExported = true;
                         updateCorruptNotice();
-                        showToast('Copia condivisa');
+                        showToast(storageRecoveryBlocked
+                            ? 'Condivisione completata: verifica di aver salvato il file fuori da Diario'
+                            : 'Copia condivisa');
                         return true;
                     }
                 }
@@ -659,13 +657,29 @@ function applySetStatics() {
                 showToast('Impossibile esportare la copia');
                 return false;
             }
-            pendingCorruptRaw = null;
-            storageRecoveryBlocked = false;
-            corruptDismissed = false;
-            if (wasBlocked) saveNow();
-            updateCorruptNotice();
-            showToast('Copia esportata');
+            if (storageRecoveryBlocked) {
+                corruptCopyExported = true;
+                updateCorruptNotice();
+                showToast('Download avviato: verifica di aver salvato il file prima di sbloccare il diario');
+            } else {
+                updateCorruptNotice();
+                showToast('Copia esportata');
+            }
             return true;
+        }
+
+        function confirmCorruptRecovery() {
+            if (!storageRecoveryBlocked || !corruptCopyExported) return;
+            const confirmed = confirm(
+                'Hai verificato che il file con i dati originali è stato salvato in una posizione esterna e che puoi ritrovarlo? Solo allora il diario potrà sovrascrivere i dati locali non leggibili.'
+            );
+            if (!confirmed) return;
+            storageRecoveryBlocked = false;
+            pendingCorruptRaw = null;
+            corruptCopyExported = false;
+            corruptDismissed = false;
+            saveNow();
+            updateCorruptNotice();
         }
 
         function initLocalSave() {
@@ -1613,6 +1627,7 @@ function applySetStatics() {
             closeImportDialog,
             confirmImport,
             exportCorruptCopy,
+            confirmCorruptRecovery,
             deleteCorruptCopy,
             dismissCorruptNotice,
             openRitualModal,
