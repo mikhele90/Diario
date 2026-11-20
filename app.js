@@ -764,7 +764,7 @@ function applySetStatics() {
                 console.error('Impossibile accedere allo storage locale:', storageError);
                 stored = {
                     snapshots: [],
-                    unreadableKeys: [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]
+                    unreadableKeys: [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY, DRAFT_KEY]
                 };
             }
             const validCandidates = [];
