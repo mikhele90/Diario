@@ -62,7 +62,10 @@ test('l’avvio valida il formato locale prima di idratare e blocca i salvataggi
 
 
 test('l’esportazione non sblocca da sola la sovrascrittura: serve una conferma esplicita', async () => {
-    const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+    const [app, html] = await Promise.all([
+        readFile(new URL('../app.js', import.meta.url), 'utf8'),
+        readFile(new URL('../index.html', import.meta.url), 'utf8')
+    ]);
     const start = app.indexOf('async function exportCorruptCopy()');
     const confirmStart = app.indexOf('function confirmCorruptRecovery()', start);
     const end = app.indexOf('function initLocalSave()', confirmStart);
@@ -74,7 +77,7 @@ test('l’esportazione non sblocca da sola la sovrascrittura: serve una conferma
     assert.match(confirmFlow, /if \(!storageRecoveryBlocked \|\| !corruptCopyExported\) return/);
     assert.match(confirmFlow, /confirm\(/);
     assert.match(confirmFlow, /storageRecoveryBlocked = false/);
-    assert.match(app, /onclick="confirmCorruptRecovery\(\)"/);
+    assert.match(html, /onclick="confirmCorruptRecovery\(\)"/);
 });
 
 
