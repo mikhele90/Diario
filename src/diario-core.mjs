@@ -187,6 +187,29 @@ export function hasAnyDiaryData(appState, today = localDateString()) {
 }
 
 /**
+ * Indica se il percorso attivo contiene dati che meritano di essere conservati
+ * quando si riprende un percorso archiviato. Nome e orari sono preferenze globali.
+ */
+export function hasPathProgress(state) {
+    if (!state || typeof state !== 'object') return false;
+    const hasText = value => typeof value === 'string' && value.trim().length > 0;
+    const hasRecords = records => Object.values(records || {}).some(item =>
+        item && ((item.score !== null && item.score !== undefined) || hasText(item.impression))
+    );
+    const hasWeekData = Object.values(state.weeks || {}).some(week => week && (
+        (Array.isArray(week.days) && week.days.some(day => day && (day.morning || day.evening))) ||
+        hasRecords(week.scents) || hasText(week.reflection) || hasText(week.otherNotes)
+    ));
+    const hasPauseData = Object.values(state.pauses || {}).some(pause =>
+        pause && Object.values(pause).some(hasText)
+    );
+    const profile = state.profile || {};
+    return hasWeekData || hasRecords(state.baseline) || hasPauseData ||
+        hasText(profile.initialNotes) || hasText(profile.finalReflection) || hasText(profile.nextStep) ||
+        !!(state.refill && state.refill.last);
+}
+
+/**
  * Restituisce la posizione del giorno corrente nel percorso:
  * { week: 1..12, dayIndex: 0..6 }, oppure null fuori dal percorso.
  * Usa giorni UTC costruiti dai componenti locali della data per evitare
