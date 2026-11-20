@@ -75,12 +75,12 @@ test('gli script e i moduli aggiornano la cache anche quando esiste una copia pr
     await Promise.all(core.waitUntil);
 });
 
-test('la nuova copia del modulo di recupero viene salvata per l’uso offline', async () => {
-    const sw = boot({ network: async () => response('recovery-module') });
-    const result = sw.run(ORIGIN + '/Diario/src/storage-recovery.mjs');
-    assert.equal((await result.responsePromise).body, 'recovery-module');
+test('il modulo di persistenza locale viene salvato per l’uso offline', async () => {
+    const sw = boot({ network: async () => response('diario-storage-module') });
+    const result = sw.run(ORIGIN + '/Diario/src/diario-storage.mjs');
+    assert.equal((await result.responsePromise).body, 'diario-storage-module');
     await Promise.all(result.waitUntil);
-    assert.equal(sw.store.get('storage-recovery.mjs').body, 'recovery-module');
+    assert.equal(sw.store.get('diario-storage.mjs').body, 'diario-storage-module');
 });
 
 test('offline usa la risorsa salvata e una rete lenta ricade sulla cache', async () => {
@@ -130,10 +130,10 @@ test('le richieste esterne e quelle non GET non vengono intercettate', () => {
 });
 
 test('la nuova cache include gli asset originali, le icone aggiornate e il modulo di sicurezza', () => {
-    assert.match(swSource, /const CACHE = 'diario-olfattivo-v18'/);
+    assert.match(swSource, /const CACHE = 'diario-olfattivo-v19'/);
     for (const file of [
         'index.html', 'styles.css', 'app.js', 'src/diario-core.mjs',
-        'src/storage-recovery.mjs', 'manifest.webmanifest',
+        'src/diario-storage.mjs', 'manifest.webmanifest',
         'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
         'icon.svg', 'icon-maskable.svg'
     ]) assert.ok(swSource.includes("'" + file + "'"), 'manca ' + file + ' in FILES');
