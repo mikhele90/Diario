@@ -209,7 +209,9 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
         }
 
         function flushSave() {
-            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+            if (!saveTimeout) return;
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
             if (!storageRecoveryBlocked) saveNow();
         }
 
