@@ -1,5 +1,5 @@
 import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, getArchiveEntriesNewestFirst, restoreArchivedPath, isValidDiaryState } from './src/diario-core.mjs';
-import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle, shouldWriteInitialState } from './src/storage-recovery.mjs';
+import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle, shouldWriteInitialState, selectBestRecoverySnapshot } from './src/storage-recovery.mjs';
 
 // =========================================================================
         // DATI STATICI DEL PERCORSO (dal diario del Set 01)
@@ -710,51 +710,82 @@ function applySetStatics() {
         function initLocalSave() {
             let loaded = false;
             let fromLegacy = false;
-            let raw = null;
             let recoveryRequired = false;
-            try {
-                raw = localStorage.getItem(STORAGE_KEY);
-                // Mantiene il fallback storico: una chiave principale vuota non
-                // deve impedire la migrazione di dati presenti nella chiave legacy.
-                if (!raw) {
-                    raw = localStorage.getItem(LEGACY_KEY);
-                    fromLegacy = !!raw;
-                }
-                if (raw) {
-                    const parsed = JSON.parse(raw);
+
+            // Legge tutte le copie conosciute senza modificarle: la chiave principale
+            // non deve nascondere una copia valida presente nell'archivio di recupero
+            // o nella vecchia chiave di migrazione.
+            const stored = collectRecoverySnapshots(
+                localStorage,
+                [STORAGE_KEY, CORRUPT_KEY, LEGACY_KEY]
+            );
+            const validCandidates = [];
+            const invalidCandidates = [];
+
+            for (const snapshot of stored.snapshots) {
+                try {
+                    const parsed = JSON.parse(snapshot.raw);
                     const candidate = isPlainObject(parsed) &&
                         Object.prototype.hasOwnProperty.call(parsed, 'state') ? parsed.state : parsed;
-                    if (!isValidDiaryState(candidate)) {
-                        throw new Error('I dati locali non rispettano il formato previsto');
+                    if (isValidDiaryState(candidate)) {
+                        validCandidates.push({ key: snapshot.key, state: candidate });
+                    } else {
+                        invalidCandidates.push(snapshot);
                     }
-                    appState = hydrateState(candidate);
-                    loaded = true;
+                } catch (err) {
+                    invalidCandidates.push(snapshot);
                 }
-            } catch (err) {
-                console.error('Errore lettura dati locali:', err);
-                recoveryRequired = true;
-                storageRecoveryBlocked = true;
-                if (raw !== null) {
-                    pendingCorruptRaw = raw;
-                    pendingCorruptSource = fromLegacy ? LEGACY_KEY : STORAGE_KEY;
+            }
+
+            const today = localDateStr();
+            const selected = selectBestRecoverySnapshot(
+                validCandidates,
+                candidate => hasAnyDiaryData(candidate, today),
+                STORAGE_KEY
+            );
+
+            if (selected) {
+                appState = hydrateState(selected.state);
+                loaded = true;
+                fromLegacy = selected.key !== STORAGE_KEY;
+            }
+
+            const invalidPrimary = invalidCandidates.find(item => item.key === STORAGE_KEY) || null;
+            const invalidBackup = invalidCandidates.find(item => item.key !== STORAGE_KEY) || null;
+            const selectedHasProgress = selected && hasAnyDiaryData(selected.state, today);
+
+            // Un archivio primario non valido, una chiave illeggibile o una copia
+            // alternativa potenzialmente più ricca richiedono sempre una decisione
+            // esplicita. Non si scrive mai il default per "riparare" questi casi.
+            recoveryRequired =
+                stored.unreadableKeys.length > 0 ||
+                !!invalidPrimary ||
+                (!selected && stored.snapshots.length > 0) ||
+                (!!invalidBackup && !selectedHasProgress);
+
+            if (invalidPrimary || invalidBackup) {
+                const source = invalidPrimary || invalidBackup;
+                pendingCorruptRaw = source.raw;
+                pendingCorruptSource = source.key;
+                if (invalidPrimary) {
                     try {
-                        // La copia locale è una protezione aggiuntiva, non autorizza mai
-                        // il salvataggio dello stato vuoto durante questo avvio.
-                        preserveCorruptSnapshot(localStorage, CORRUPT_KEY, raw);
+                        // La copia locale è un ulteriore tentativo di protezione:
+                        // anche quando riesce, non autorizza il salvataggio automatico.
+                        preserveCorruptSnapshot(localStorage, CORRUPT_KEY, invalidPrimary.raw);
                     } catch (copyError) {
                         console.error('Impossibile conservare la copia di sicurezza:', copyError);
                     }
                 }
             }
 
-            // Un archivio illeggibile/non valido non deve MAI essere sostituito
-            // automaticamente con createDefaultState(), neppure se la copia locale
-            // è riuscita: serve prima un'esportazione esplicita del pacchetto completo.
+            storageRecoveryBlocked = recoveryRequired;
+
             if (recoveryRequired) {
                 updateSyncBadge('error');
             } else if (loaded && !fromLegacy) {
                 updateSyncBadge('saved');
             } else if (shouldWriteInitialState({ loaded, fromLegacy, recoveryRequired })) {
+                // Nuova installazione oppure migrazione da una copia valida.
                 saveNow();
             }
 
