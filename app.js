@@ -391,43 +391,7 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
             showToast('Diario importato');
         }
 
-        function importData(event) {
-            const input = event.target;
-            const file = input.files && input.files[0];
-            if (!file) return;
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('Backup troppo grande (massimo 5 MB)');
-                input.value = '';
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const parsed = JSON.parse(e.target.result);
-                    const candidate = isPlainObject(parsed) &&
-                        Object.prototype.hasOwnProperty.call(parsed, 'state') ? parsed.state : parsed;
-                    if (!isValidDiaryState(candidate)) {
-                        showToast('Backup non valido o danneggiato');
-                        return;
-                    }
-                    openImportDialog(candidate);
-                } catch (err) {
-                    console.error('Errore importazione backup:', err);
-                    showToast('File non valido');
-                } finally {
-                    input.value = '';
-                }
-            };
-            reader.onerror = () => {
-                input.value = '';
-                showToast('Impossibile leggere il file');
-            };
-            reader.readAsText(file);
-        }
-
-        // =========================================================================
-        // TIMER GUIDATO DEL RITUALE
+        
             const set = SET_DEFS[appState.setId] || SET_DEFS.set01;
             ['set-badge', 'guide-set-badge'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = set.name; });
             document.querySelectorAll('[data-scent-th]').forEach(th => { th.textContent = SCENTS[+th.dataset.scentTh].name.split(' ')[0]; });
@@ -439,6 +403,19 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
             renderArchive();
             lucide.createIcons();
         }
+function applySetStatics() {
+            const set = SET_DEFS[appState.setId] || SET_DEFS.set01;
+            ['set-badge', 'guide-set-badge'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = set.name; });
+            document.querySelectorAll('[data-scent-th]').forEach(th => { th.textContent = SCENTS[+th.dataset.scentTh].name.split(' ')[0]; });
+            const gs = document.getElementById('guide-scents');
+            if (gs) gs.innerHTML = SCENTS.map(x => { const p = PALETTE[x.colorClass]; return `<div class="p-5 rounded-2xl ${p.c} flex gap-4"><div class="w-12 h-12 rounded-2xl ${p.i} flex items-center justify-center shrink-0"><i data-lucide="sprout" class="w-6 h-6"></i></div><div><h3 class="font-bold text-stone-900 text-base">${x.name}</h3><p class="text-xs font-semibold ${p.t} mt-0.5">${x.character}</p><p class="text-sm text-stone-600 mt-2">${x.hint}</p></div></div>`; }).join('');
+            const oh = [...document.querySelectorAll('h3')].find(e => e.textContent.trim() === 'I tuoi quattro oli');
+            if (oh && oh.parentElement) oh.parentElement.classList.toggle('hidden', appState.setId !== 'set01');
+            renderNextChoice();
+            renderArchive();
+            lucide.createIcons();
+        }
+
         // =========================================================================
         // ACCESSIBILITÀ MODALI: focus iniziale, contenimento, Esc e ripristino
         // =========================================================================
@@ -1351,7 +1328,6 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
                 input.value = '';
                 return;
             }
-
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -1362,12 +1338,7 @@ import { preserveCorruptSnapshot } from './src/storage-recovery.mjs';
                         showToast('Backup non valido o danneggiato');
                         return;
                     }
-                    if (!confirm('Importando questo file sostituisci tutti i dati attuali del diario. Continuare?')) return;
-                    appState = hydrateState(candidate);
-                    applySetStatics();
-                    switchTab('calendario');
-                    saveNow();
-                    showToast('Diario importato');
+                    openImportDialog(candidate);
                 } catch (err) {
                     console.error('Errore importazione backup:', err);
                     showToast('File non valido');
