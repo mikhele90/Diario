@@ -130,7 +130,7 @@ test('le richieste esterne e quelle non GET non vengono intercettate', () => {
 });
 
 test('la nuova cache include gli asset originali, le icone aggiornate e il modulo di sicurezza', () => {
-    assert.match(swSource, /const CACHE = 'diario-olfattivo-v17'/);
+    assert.match(swSource, /const CACHE = 'diario-olfattivo-v18'/);
     for (const file of [
         'index.html', 'styles.css', 'app.js', 'src/diario-core.mjs',
         'src/storage-recovery.mjs', 'manifest.webmanifest',
