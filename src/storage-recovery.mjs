@@ -88,3 +88,54 @@ export function selectBestRecoverySnapshot(candidates, hasProgress = () => false
         valid[0] ||
         null;
 }
+
+/**
+ * Salva i dati in uno spazio separato mentre è attiva la modalità di recupero.
+ * La chiave originale resta intatta fino alla conferma esplicita.
+ * Ogni scrittura viene riletta e verificata prima di dichiararla riuscita.
+ */
+export function persistDiarySnapshot(storage, {
+    primaryKey,
+    draftKey,
+    state,
+    savedAt,
+    recoveryMode = false
+} = {}) {
+    if (!storage || typeof storage.setItem !== 'function' ||
+        typeof storage.getItem !== 'function' ||
+        typeof primaryKey !== 'string' || !primaryKey ||
+        typeof draftKey !== 'string' || !draftKey ||
+        !state || typeof state !== 'object' ||
+        typeof savedAt !== 'string') {
+        return { saved: false, key: null, error: new Error('Parametri di salvataggio non validi') };
+    }
+
+    const key = recoveryMode ? draftKey : primaryKey;
+    try {
+        const raw = JSON.stringify({ savedAt, state });
+        storage.setItem(key, raw);
+        if (storage.getItem(key) !== raw) {
+            return { saved: false, key, error: new Error('Verifica del salvataggio non riuscita') };
+        }
+
+        if (!recoveryMode) {
+            // Dopo aver verificato la copia principale, elimina la bozza. Se la
+            // rimozione non è consentita, riallineala al valore principale appena
+            // scritto: non deve poter ripristinare una versione più vecchia.
+            try {
+                if (typeof storage.removeItem === 'function') {
+                    storage.removeItem(draftKey);
+                }
+                if (storage.getItem(draftKey) !== null) {
+                    storage.setItem(draftKey, raw);
+                }
+            } catch (cleanupError) {
+                try { storage.setItem(draftKey, raw); } catch (ignore) {}
+            }
+        }
+
+        return { saved: true, key, raw };
+    } catch (error) {
+        return { saved: false, key, error };
+    }
+}
