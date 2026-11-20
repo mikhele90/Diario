@@ -103,6 +103,6 @@ test('rifiuta indici e voci non validi e non supera il limite dell’archivio', 
     assert.equal(restoreArchivedPath(current, -1), null);
     assert.equal(restoreArchivedPath(current, 2), null);
 
-    current.archive = Array.from({ length: 500 }, (_, i) => archived(i % 2 ? 'set01' : 'set02', '2026-01-01'));
+    current.archive = Array.from({ length: 501 }, (_, i) => archived(i % 2 ? 'set01' : 'set02', '2026-01-01'));
     assert.equal(restoreArchivedPath(current, 0), null);
 });
