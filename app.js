@@ -1,4 +1,4 @@
-import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, getArchiveEntriesNewestFirst, restoreArchivedPath, isValidDiaryState } from './src/diario-core.mjs';
+import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, hasPathProgress, hasRecoverableDiaryContent, getArchiveEntriesNewestFirst, restoreArchivedPath, isValidDiaryState } from './src/diario-core.mjs';
 import { preserveCorruptSnapshot, collectRecoverySnapshots, createRecoveryBundle, shouldWriteInitialState, selectBestRecoverySnapshot } from './src/storage-recovery.mjs';
 
 // =========================================================================
@@ -756,7 +756,7 @@ function applySetStatics() {
             const today = localDateStr();
             const selected = selectBestRecoverySnapshot(
                 validCandidates,
-                candidate => hasAnyDiaryData(candidate, today),
+                hasRecoverableDiaryContent,
                 STORAGE_KEY
             );
 
