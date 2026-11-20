@@ -5,7 +5,8 @@ import {
     preserveCorruptSnapshot,
     collectRecoverySnapshots,
     createRecoveryBundle,
-    shouldWriteInitialState
+    shouldWriteInitialState,
+    selectBestRecoverySnapshot
 } from '../src/storage-recovery.mjs';
 
 function createStorage(initial = {}) {
@@ -183,6 +184,27 @@ test('una chiave principale vuota continua a migrare dati validi dalla chiave le
 
     assert.ok(start >= 0 && end > start);
     assert.match(init, /raw = localStorage\.getItem\(STORAGE_KEY\);[\s\S]*?if \(!raw\) \{\s*raw = localStorage\.getItem\(LEGACY_KEY\);\s*fromLegacy = !!raw;/);
+});
+
+
+test('preferisce una copia valida con progressi a una primaria vuota', () => {
+    const empty = { key: 'diario-olfattivo-v1', state: { marker: 'vuoto' } };
+    const recovered = { key: 'diario-olfattivo-v1-corrotto', state: { marker: 'progressi' } };
+    const selected = selectBestRecoverySnapshot(
+        [empty, recovered],
+        state => state.marker === 'progressi'
+    );
+    assert.equal(selected, recovered);
+});
+
+test('mantiene la chiave primaria quando entrambe le copie valide hanno progressi', () => {
+    const primary = { key: 'diario-olfattivo-v1', state: { marker: 'principale' } };
+    const backup = { key: 'diario-olfattivo-v1-corrotto', state: { marker: 'backup' } };
+    const selected = selectBestRecoverySnapshot(
+        [primary, backup],
+        () => true
+    );
+    assert.equal(selected, primary);
 });
 
 test('pagehide e cambio visibilità non scrivono se non c’è un salvataggio pendente', async () => {
