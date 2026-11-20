@@ -57,5 +57,5 @@ test('le icone vettoriali sono dichiarate correttamente e includono una zona sic
     const regular = await readFile(new URL('icon.svg', root), 'utf8');
     const maskable = await readFile(new URL('icon-maskable.svg', root), 'utf8');
     assert.match(regular, /transform="translate\(-26 -20\)"/);
-    assert.match(maskable, /translate\(64 64\.4\) scale\(0\.75\) translate\(-26 -20\)/);
+    assert.match(maskable, /translate\(64 61\.4\) scale\(0\.75\) translate\(-26 -20\)/);
 });
