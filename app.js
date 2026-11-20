@@ -400,6 +400,10 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
 
         let pendingRestore = null;
         function openRestoreDialog(i) {
+            if (corruptRecoveryBlocked) {
+                showToast('Prima esporta la copia dei dati precedenti dalla fascia di avviso');
+                return;
+            }
             const entry = (appState.archive || [])[i];
             if (!entry || !entry.state) return;
             pendingRestore = i;
@@ -463,6 +467,10 @@ import { escapeHtml, getRitualPosition, getScentTrendPoints, hasAnyDiaryData, ha
 
         let pendingImport = null;
         function openImportDialog(candidate) {
+            if (corruptRecoveryBlocked) {
+                showToast('Prima esporta la copia dei dati precedenti dalla fascia di avviso');
+                return;
+            }
             pendingImport = candidate;
             const def = SET_DEFS[candidate.setId] || SET_DEFS.set01;
             const sessions = Object.values(candidate.weeks).reduce((count, week) =>
