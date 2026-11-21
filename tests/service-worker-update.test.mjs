@@ -115,11 +115,12 @@ test('la navigazione aggiorna index.html e lo restituisce dalla cache in caso di
 
 test('icone PNG e SVG restano cache-first', async () => {
     const sw = boot({
-        cached: { 'icon-192.png': response('png cached'), 'icon.svg': response('svg cached') },
+        cached: { 'icon-192.png': response('png cached'), 'icon-v2.svg': response('svg cached'), 'icon-maskable-v2.svg': response('maskable cached') },
         network: async () => response('network icon')
     });
     assert.equal((await sw.run(ORIGIN + '/Diario/icon-192.png').responsePromise).body, 'png cached');
-    assert.equal((await sw.run(ORIGIN + '/Diario/icon.svg').responsePromise).body, 'svg cached');
+    assert.equal((await sw.run(ORIGIN + '/Diario/icon-v2.svg').responsePromise).body, 'svg cached');
+    assert.equal((await sw.run(ORIGIN + '/Diario/icon-maskable-v2.svg').responsePromise).body, 'maskable cached');
     assert.equal(sw.calls.length, 0);
 });
 
@@ -130,11 +131,11 @@ test('le richieste esterne e quelle non GET non vengono intercettate', () => {
 });
 
 test('la nuova cache include gli asset originali, le icone aggiornate e il modulo di sicurezza', () => {
-    assert.match(swSource, /const CACHE = 'diario-olfattivo-v19'/);
+    assert.match(swSource, /const CACHE = 'diario-olfattivo-v20'/);
     for (const file of [
         'index.html', 'styles.css', 'app.js', 'src/diario-core.mjs',
         'src/diario-storage.mjs', 'manifest.webmanifest',
         'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
-        'icon.svg', 'icon-maskable.svg'
+        'icon-v2.svg', 'icon-maskable-v2.svg'
     ]) assert.ok(swSource.includes("'" + file + "'"), 'manca ' + file + ' in FILES');
 });
