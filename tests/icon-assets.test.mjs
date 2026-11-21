@@ -7,9 +7,9 @@ const root = new URL('../', import.meta.url);
 test('le icone PWA esistono e corrispondono alle dimensioni dichiarate nel manifest', async () => {
     const manifest = JSON.parse(await readFile(new URL('manifest.webmanifest', root), 'utf8'));
     const expected = [
-        { src: 'icon-192.png', size: 192, purpose: 'any' },
-        { src: 'icon-512.png', size: 512, purpose: 'any' },
-        { src: 'icon-maskable-512.png', size: 512, purpose: 'maskable' }
+        { src: 'icon-192-v2.png', size: 192, purpose: 'any' },
+        { src: 'icon-512-v2.png', size: 512, purpose: 'any' },
+        { src: 'icon-maskable-512-v2.png', size: 512, purpose: 'maskable' }
     ];
 
     assert.equal(manifest.icons.length, expected.length + 2);
