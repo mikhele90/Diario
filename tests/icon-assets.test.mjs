@@ -33,11 +33,11 @@ test('le icone PWA esistono e corrispondono alle dimensioni dichiarate nel manif
 });
 
 
-test('le icone vettoriali sono dichiarate correttamente e includono una zona sicura maskable', async () => {
+test('le icone vettoriali versionate riproducono la composizione originale e rispettano la zona sicura maskable', async () => {
     const manifest = JSON.parse(await readFile(new URL('manifest.webmanifest', root), 'utf8'));
     const expected = [
-        { src: 'icon.svg', purpose: 'any' },
-        { src: 'icon-maskable.svg', purpose: 'maskable' }
+        { src: 'icon-v2.svg', purpose: 'any', transform: 'translate(-42.6667 12.3333) scale(0.3333333)' },
+        { src: 'icon-maskable-v2.svg', purpose: 'maskable', transform: 'translate(51.2 51.2) scale(0.8) translate(-42.6667 12.3333) scale(0.3333333)' }
     ];
 
     for (const icon of expected) {
@@ -49,13 +49,14 @@ test('le icone vettoriali sono dichiarate correttamente e includono una zona sic
 
         const svg = await readFile(new URL(icon.src, root), 'utf8');
         assert.match(svg, /<svg[^>]*viewBox="0 0 512 512"/);
-        assert.match(svg, /<radialGradient id="bg"/);
-        assert.match(svg, /<linearGradient id="ivory"/);
-        assert.match(svg, /<linearGradient id="gold"/);
+        assert.match(svg, /<radialGradient id="background"/);
+        assert.equal((svg.match(/<path /g) || []).length, 5, 'Il disegno deve contenere naso, due flussi e due foglie separati');
+        assert.ok(svg.includes(`transform="${icon.transform}"`), 'La composizione deve essere centrata e mantenere la scala prevista');
     }
 
-    const regular = await readFile(new URL('icon.svg', root), 'utf8');
-    const maskable = await readFile(new URL('icon-maskable.svg', root), 'utf8');
-    assert.match(regular, /transform="translate\(-26 -20\)"/);
-    assert.match(maskable, /translate\(64 61\.4\) scale\(0\.75\) translate\(-26 -20\)/);
+    assert.deepEqual(
+        manifest.icons.slice(0, 2).map(icon => icon.src),
+        ['icon-maskable-v2.svg', 'icon-v2.svg'],
+        'Chrome deve trovare prima le nuove icone versionate'
+    );
 });
