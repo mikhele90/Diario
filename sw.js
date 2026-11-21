@@ -10,9 +10,9 @@ const FILES = [
   'src/diario-core.mjs',
   'src/diario-storage.mjs',
   'manifest.webmanifest',
-  'icon-192.png',
-  'icon-512.png',
-  'icon-maskable-512.png',
+  'icon-192-v2.png',
+  'icon-512-v2.png',
+  'icon-maskable-512-v2.png',
   'icon-v2.svg',
   'icon-maskable-v2.svg'
 ];
