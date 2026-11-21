@@ -1,7 +1,7 @@
 // Le pagine, gli script, i moduli e gli stili provano prima la rete; offline usano la cache.
 // Gli asset grafici restano cache-first per evitare richieste inutili.
 const CACHE_PREFIX = 'diario-olfattivo-';
-const CACHE = 'diario-olfattivo-v19';
+const CACHE = 'diario-olfattivo-v20';
 const FILES = [
   './',
   'index.html',
@@ -10,11 +10,11 @@ const FILES = [
   'src/diario-core.mjs',
   'src/diario-storage.mjs',
   'manifest.webmanifest',
-  'icon-192.png',
-  'icon-512.png',
-  'icon-maskable-512.png',
-  'icon.svg',
-  'icon-maskable.svg'
+  'icon-192-v2.png',
+  'icon-512-v2.png',
+  'icon-maskable-512-v2.png',
+  'icon-v2.svg',
+  'icon-maskable-v2.svg'
 ];
 
 self.addEventListener('install', event => {
@@ -72,7 +72,7 @@ self.addEventListener('fetch', event => {
   }
 
   if (/\/icon-[\w-]+\.png$/.test(url.pathname) ||
-      /\/icon(?:-maskable)?\.svg$/.test(url.pathname)) {
+      /\/icon(?:-maskable)?(?:-v\d+)?\.svg$/.test(url.pathname)) {
     event.respondWith(
       caches.match(event.request, { ignoreSearch: true }).then(cached => cached || fetch(event.request))
     );

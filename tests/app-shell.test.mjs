@@ -74,11 +74,11 @@ test('il service worker mette in cache tutti i moduli necessari offline', () => 
         'src/diario-core.mjs',
         'src/diario-storage.mjs',
         'manifest.webmanifest',
-        'icon-192.png',
-        'icon-512.png',
-        'icon-maskable-512.png',
-        'icon.svg',
-        'icon-maskable.svg'
+        'icon-192-v2.png',
+        'icon-512-v2.png',
+        'icon-maskable-512-v2.png',
+        'icon-v2.svg',
+        'icon-maskable-v2.svg'
     ]) {
         assert.ok(cachedFiles.has(file), `File non precaricato: ${file}`);
     }
@@ -90,3 +90,13 @@ test('manifest mantiene URL e ambito relativi per il deploy in sottocartella', (
     assert.equal(parsed.scope, './');
     assert.equal(parsed.display, 'standalone');
 });
+
+
+test('manifest usa le icone originali con URL versionati e varianti corrette', () => {
+    const parsed = JSON.parse(manifest);
+    assert.equal(parsed.icons[0].src, 'icon-maskable-v2.svg');
+    assert.equal(parsed.icons[0].purpose, 'maskable');
+    assert.equal(parsed.icons[1].src, 'icon-v2.svg');
+    assert.equal(parsed.icons[1].purpose, 'any');
+    assert.ok(parsed.icons.every(icon => icon.type === 'image/svg+xml' || icon.type === 'image/png'));
+  });

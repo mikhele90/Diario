@@ -68,7 +68,7 @@ test('il ripristino da file resta accessibile e la spiegazione dei dati locali �
 });
 
 test('la UI della scheda Percorso è disponibile anche dopo l’aggiornamento PWA', () => {
-    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v19'/);
+    assert.match(serviceWorker, /const CACHE = 'diario-olfattivo-v20'/);
     for (const file of ['index.html', 'styles.css', 'app.js']) {
         assert.match(serviceWorker, new RegExp(file.replace('.', '\\.') ));
     }
